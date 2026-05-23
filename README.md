@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SkillSync AI
 
 AI-powered freelancer marketplace with a handcrafted, premium dark UI.
@@ -34,3 +35,6 @@ Open [http://localhost:5173](http://localhost:5173).
 - Tailwind CSS v4
 - Framer Motion
 - React Router
+=======
+# freelancing
+>>>>>>> 9d273d792fe639451bb37b3a45512184d0e0771f
