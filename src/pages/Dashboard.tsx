@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, type UserRole } from "../context/UserContext";
 import { CompletenessWidget } from "../components/ui/CompletenessWidget";
+import { TaskChecklist } from "../components/ui/TaskChecklist";
 import { projects } from "../data/mockData";
+import { useProjects } from "../context/ProjectContext";
+import { useTalent } from "../context/TalentContext";
+import { computeMatches } from "../utils/matching";
 import {
   LayoutGrid,
   FolderKanban,
@@ -40,7 +44,32 @@ const colorPalettes = [
 
 export function Dashboard() {
   const { user, signup, setRole, setActiveRoleView } = useUser();
+  const { projects: clientProjects } = useProjects();
+  const { talentPool, myTalentId } = useTalent();
   const [aiInput, setAiInput] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  // Auto-select the first project when projects load or change
+  useEffect(() => {
+    if (clientProjects.length > 0) {
+      setSelectedProjectId((prev) => {
+        if (!prev) return clientProjects[0].id;
+        const exists = clientProjects.some((p) => p.id === prev);
+        return exists ? prev : clientProjects[0].id;
+      });
+    } else {
+      setSelectedProjectId(null);
+    }
+  }, [clientProjects]);
+
+  const selectedProject = useMemo(() => {
+    return clientProjects.find((p) => p.id === selectedProjectId) || null;
+  }, [clientProjects, selectedProjectId]);
+
+  const matches = useMemo(() => {
+    if (!selectedProject) return [];
+    return computeMatches(talentPool, selectedProject, myTalentId ?? undefined).slice(0, 5);
+  }, [selectedProject, talentPool, myTalentId]);
   const [messages, setMessages] = useState(() => [
     {
       role: "ai",
@@ -405,7 +434,7 @@ export function Dashboard() {
               </>
             ) : (
               <>
-                <span>2 active job postings · 12 applications received</span>
+                <span>{clientProjects.length} active job postings · {clientProjects.reduce((acc, p) => acc + p.proposalsCount, 0)} applications received</span>
                 {user.verification.status === "verified" && (
                   <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-mint)] font-mono">
                     <ShieldCheck size={11} /> VERIFIED HIRER
@@ -473,23 +502,7 @@ export function Dashboard() {
                   ))}
                 </div>
 
-                <div className="glass rounded-xl p-6">
-                  <h3 className="font-medium text-sm mb-4">Today's focus</h3>
-                  <ul className="space-y-3 text-sm text-[var(--color-muted)]">
-                    <li className="flex items-center gap-3">
-                      <input type="checkbox" className="rounded border-[var(--color-border)]" defaultChecked />
-                      <span className="line-through opacity-60">Review Helix AI feedback</span>
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <input type="checkbox" className="rounded border-[var(--color-border)]" />
-                      Vault Finance — Visual design handoff
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <input type="checkbox" className="rounded border-[var(--color-border)]" />
-                      Respond to Bloom Studio proposal
-                    </li>
-                  </ul>
-                </div>
+                <TaskChecklist roleView="freelancer" title="Today's focus" />
               </motion.div>
             ) : (
               // VIEW B: CLIENT VIEWPORT
@@ -506,49 +519,76 @@ export function Dashboard() {
                     <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
                       Active Job Postings
                     </p>
-                    <button
+                    <Link
+                      to="/post-project"
                       className="text-[11px] font-semibold flex items-center gap-1 hover:underline text-[var(--color-mint)]"
                       style={{ color: user.color }}
                     >
                       <Plus size={12} /> Post a Job
-                    </button>
+                    </Link>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all">
-                      <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-[var(--color-mint)]/10 text-[var(--color-mint)]">
-                        MATCHING ACTIVE
-                      </span>
-                      <h3 className="font-medium mt-3 text-white">AI Product Designer</h3>
-                      <p className="text-xs text-[var(--color-muted)] mt-1">
-                        Budget: $10,000 · Location: Remote
-                      </p>
-                      <div className="flex justify-between items-center mt-6 text-[11px] text-[var(--color-muted)] pt-3 border-t border-white/5">
-                        <span>6 Candidates matched</span>
-                        <Link
-                          to="/ai/smart-match"
-                          className="text-[var(--color-warm)] hover:underline flex items-center gap-0.5"
-                          style={{ color: user.color }}
-                        >
-                          Evaluate Match <ChevronRight size={10} />
-                        </Link>
-                      </div>
+                  {clientProjects.length === 0 ? (
+                    <div className="glass rounded-xl p-8 text-center border border-white/5 bg-white/[0.005]">
+                      <p className="text-sm text-[var(--color-muted)] mb-4">No projects yet. Post your first project</p>
+                      <Link
+                        to="/post-project"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-black hover:opacity-90 transition-opacity"
+                        style={{ backgroundColor: user.color }}
+                      >
+                        <Plus size={12} /> Post a Job
+                      </Link>
                     </div>
-
-                    <div className="glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all">
-                      <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-white/5 text-[var(--color-muted)]">
-                        DRAFT STAGE
-                      </span>
-                      <h3 className="font-medium mt-3 text-white">Full-stack React Engineer</h3>
-                      <p className="text-xs text-[var(--color-muted)] mt-1">
-                        Budget: $85/hr · Duration: 3 months
-                      </p>
-                      <div className="flex justify-between items-center mt-6 text-[11px] text-[var(--color-muted)] pt-3 border-t border-white/5">
-                        <span>Post is inactive</span>
-                        <button className="text-white hover:underline">Publish Now</button>
-                      </div>
+                  ) : (
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {clientProjects.map((proj) => {
+                        const isSelected = proj.id === selectedProjectId;
+                        return (
+                          <div
+                            key={proj.id}
+                            onClick={() => setSelectedProjectId(proj.id)}
+                            className="glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all flex flex-col justify-between cursor-pointer border"
+                            style={{
+                              borderColor: isSelected ? user.color : "rgba(255, 255, 255, 0.05)",
+                              boxShadow: isSelected ? `0 0 15px ${user.color}25` : "none"
+                            }}
+                          >
+                            <div>
+                              <span 
+                                className="text-[9px] font-mono px-2 py-0.5 rounded"
+                                style={{
+                                  backgroundColor: `${user.color}15`,
+                                  color: user.color,
+                                  border: `1px solid ${user.color}25`
+                                }}
+                              >
+                                {proj.projectType === "Fixed" ? "FIXED BUDGET" : "HOURLY RATE"}
+                              </span>
+                              <h3 className="font-medium mt-3 text-white line-clamp-1">{proj.title}</h3>
+                              <p className="text-xs text-[var(--color-muted)] mt-1.5 line-clamp-2">
+                                {proj.description}
+                              </p>
+                            </div>
+                            
+                            <div className="mt-5 pt-3 border-t border-white/5 flex flex-col gap-2">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="text-[var(--color-muted)]">Budget</span>
+                                <span className="font-semibold text-white">
+                                  {proj.projectType === "Fixed" ? `$${proj.budget.toLocaleString()}` : `$${proj.budget}/hr`}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-[11px] text-[var(--color-muted)]">
+                                <span>{proj.proposalsCount} proposals</span>
+                                <span className="capitalize px-1.5 py-0.5 rounded bg-white/5 text-[10px]">
+                                  {proj.status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Candidate Matches */}
@@ -558,63 +598,79 @@ export function Dashboard() {
                     <Sparkles size={16} className="text-[var(--color-warm)]" style={{ color: user.color }} />
                   </div>
                   <div className="space-y-3">
-                    {[
-                      { name: "James Okafor", role: "Full-stack Engineer", match: 91, skills: ["React", "Node"], color: "#6ee7b7" },
-                      { name: "Elena Voss", role: "ML Engineer", match: 88, skills: ["PyTorch", "LLMs"], color: "#7dd3fc" },
-                    ].map((candidate) => (
-                      <div
-                        key={candidate.name}
-                        className="p-3.5 rounded-lg border border-white/5 hover:border-white/10 bg-white/[0.005] flex items-center justify-between transition-all"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold font-mono"
-                            style={{ background: `${candidate.color}22`, color: candidate.color }}
-                          >
-                            {candidate.name.split(" ").map(n => n[0]).join("")}
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold text-white">{candidate.name}</div>
-                            <div className="text-[10px] text-[var(--color-muted)] mt-0.5">
-                              {candidate.role} · {candidate.skills.join(", ")}
+                    {!selectedProject ? (
+                      <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)] flex flex-col items-center gap-3">
+                        <span>Post a project to see matches</span>
+                        <Link
+                          to="/post-project"
+                          className="px-4 py-2 rounded-xl text-xs font-semibold text-black hover:opacity-90 transition-opacity"
+                          style={{ backgroundColor: user.color }}
+                        >
+                          Post a Job
+                        </Link>
+                      </div>
+                    ) : talentPool.length === 0 ? (
+                      <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)]">
+                        No freelancers on SkillSync yet. When freelancers complete their profiles, matches appear here in real time.
+                      </div>
+                    ) : matches.length === 0 ? (
+                      <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)]">
+                        No strong matches for this project yet. Add or adjust required skills on your posting.
+                      </div>
+                    ) : (
+                      matches.map((candidate) => (
+                        <div
+                          key={candidate.id}
+                          className="p-3.5 rounded-lg border border-white/5 hover:border-white/10 bg-white/[0.005] flex items-center justify-between transition-all"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold font-mono"
+                              style={{ background: `${candidate.color}22`, color: candidate.color }}
+                            >
+                              {candidate.avatar || candidate.name.split(" ").map((n: string) => n[0]).join("")}
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-white">{candidate.name}</div>
+                              <div className="text-[10px] text-[var(--color-muted)] mt-0.5">
+                                {candidate.headline} · {candidate.skills.slice(0, 3).join(", ")}{candidate.skills.length > 3 && "..."}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="text-right">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--color-mint)]/10 text-[var(--color-mint)] text-[10px] font-mono border border-[var(--color-mint)]/10">
-                            {candidate.match}% Match
-                          </span>
-                          <div
-                            className="text-[10px] mt-1 hover:underline cursor-pointer text-[var(--color-warm)]"
-                            style={{ color: user.color }}
-                          >
-                            Evaluate Proposal
+                          <div className="text-right flex flex-col items-end">
+                            {candidate.matchScore < 40 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-950/20 text-red-400 text-[10px] font-mono border border-red-900/30">
+                                Low match (below 40%)
+                              </span>
+                            ) : (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border"
+                                style={{
+                                  backgroundColor: `${user.color}10`,
+                                  borderColor: `${user.color}25`,
+                                  color: user.color
+                                }}
+                              >
+                                AI Match: {candidate.matchScore}%
+                              </span>
+                            )}
+                            <Link
+                              to={`/ai/proposal-evaluator?freelancerId=${candidate.id}&projectId=${selectedProject.id}`}
+                              className="text-[10px] mt-1.5 hover:underline cursor-pointer text-[var(--color-warm)]"
+                              style={{ color: user.color }}
+                            >
+                              Evaluate Proposal
+                            </Link>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
 
                 {/* Checklist Client */}
-                <div className="glass rounded-xl p-6">
-                  <h3 className="font-medium text-sm mb-4">Today's Hiring Checklist</h3>
-                  <ul className="space-y-3 text-sm text-[var(--color-muted)]">
-                    <li className="flex items-center gap-3">
-                      <input type="checkbox" className="rounded border-[var(--color-border)]" defaultChecked />
-                      <span className="line-through opacity-60">Authorize escrow deposit for Vault Finance</span>
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <input type="checkbox" className="rounded border-[var(--color-border)]" />
-                      Review James Okafor's React coding test suitability
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <input type="checkbox" className="rounded border-[var(--color-border)]" />
-                      Schedule introductory Zoom call with ML consultant Elena
-                    </li>
-                  </ul>
-                </div>
+                <TaskChecklist roleView="client" title="Today's Hiring Checklist" />
               </motion.div>
             )}
           </AnimatePresence>
