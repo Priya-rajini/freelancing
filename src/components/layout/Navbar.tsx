@@ -1,8 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, ShieldCheck, LogOut } from "lucide-react";
 import { useState } from "react";
 import { MagneticButton } from "../ui/MagneticButton";
+import { useUser } from "../../context/UserContext";
 
 const links = [
   { to: "/", label: "Home" },
@@ -16,6 +17,7 @@ const links = [
 export function Navbar() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const { user, setActiveRoleView, logout } = useUser();
 
   return (
     <>
@@ -59,9 +61,72 @@ export function Navbar() {
             <MagneticButton to="/talent" variant="ghost" className="!px-4 !py-2 text-[13px]">
               Browse
             </MagneticButton>
-            <MagneticButton to="/dashboard" variant="primary" className="!px-4 !py-2 text-[13px]">
-              Get Started
-            </MagneticButton>
+            
+            {user.isRegistered ? (
+              <div className="flex items-center gap-3 pl-3 border-l border-white/10">
+                {user.role === "both" && (
+                  <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/5">
+                    <button
+                      onClick={() => setActiveRoleView("freelancer")}
+                      className={`px-2 py-1 text-[10px] rounded font-semibold transition-all ${
+                        user.activeRoleView === "freelancer"
+                          ? "bg-[var(--color-warm)] text-black"
+                          : "text-[var(--color-muted)] hover:text-white"
+                      }`}
+                    >
+                      Freelancer
+                    </button>
+                    <button
+                      onClick={() => setActiveRoleView("client")}
+                      className={`px-2 py-1 text-[10px] rounded font-semibold transition-all ${
+                        user.activeRoleView === "client"
+                          ? "bg-[var(--color-warm)] text-black"
+                          : "text-[var(--color-muted)] hover:text-white"
+                      }`}
+                    >
+                      Client
+                    </button>
+                  </div>
+                )}
+                
+                <Link
+                  to={`/profile/me`}
+                  className="flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-white/5 transition-all border border-transparent hover:border-white/5"
+                >
+                  <div
+                    className="h-6 w-6 rounded-lg flex items-center justify-center text-[10px] font-bold relative"
+                    style={{
+                      background: `${user.color}22`,
+                      color: user.color,
+                      border: `1px solid ${user.color}33`,
+                    }}
+                  >
+                    {user.avatar}
+                    {user.verification.status === "verified" && (
+                      <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--color-mint)] border border-[var(--color-void)]" />
+                    )}
+                  </div>
+                  <span className="text-[12px] font-medium text-[var(--color-text)] flex items-center gap-1">
+                    {user.name.split(" ")[0] || "User"}
+                    {user.verification.status === "verified" && (
+                      <ShieldCheck size={11} className="text-[var(--color-mint)]" />
+                    )}
+                  </span>
+                </Link>
+
+                <button
+                  onClick={logout}
+                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0"
+                  title="Log Out"
+                >
+                  <LogOut size={14} />
+                </button>
+              </div>
+            ) : (
+              <MagneticButton to="/dashboard" variant="primary" className="!px-4 !py-2 text-[13px]">
+                Get Started
+              </MagneticButton>
+            )}
           </div>
 
           <button
