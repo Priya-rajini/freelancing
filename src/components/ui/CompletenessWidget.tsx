@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, type UserRole } from "../../context/UserContext";
 import {
@@ -21,6 +21,7 @@ export function CompletenessWidget() {
     addSkill,
     removeSkill,
     addPortfolioItem,
+    updateProfileFields,
     completeness,
   } = useUser();
 
@@ -30,6 +31,21 @@ export function CompletenessWidget() {
   const [portfolioTitle, setPortfolioTitle] = useState("");
   const [portfolioCategory, setPortfolioCategory] = useState("Product");
   const [isVerifyOpen, setIsVerifyOpen] = useState(false);
+
+  // Dynamic preference states
+  const [companyName, setCompanyName] = useState(user.companyName || "");
+  const [hiringPreferences, setHiringPreferences] = useState(user.hiringPreferences || "");
+  const [experienceYears, setExperienceYears] = useState(user.experienceYears || "");
+  const [availability, setAvailability] = useState(user.availability || "");
+
+  // Sync state if user settings update
+  useEffect(() => {
+    setBioText(user.bio);
+    setCompanyName(user.companyName || "");
+    setHiringPreferences(user.hiringPreferences || "");
+    setExperienceYears(user.experienceYears || "");
+    setAvailability(user.availability || "");
+  }, [user]);
 
   const toggleExpand = (item: string) => {
     setExpandedItem((prev) => (prev === item ? null : item));
@@ -69,9 +85,21 @@ export function CompletenessWidget() {
     }
   };
 
+  const handleSaveClientPrefs = () => {
+    updateProfileFields({ companyName, hiringPreferences });
+    setExpandedItem(null);
+  };
+
+  const handleSaveFreelancerPrefs = () => {
+    updateProfileFields({ experienceYears, availability });
+    setExpandedItem(null);
+  };
+
   const currentScore = completeness.score;
-  const { roleSelected, verified, bioAdded, skillsAdded, portfolioAdded } =
+  const { roleSelected, verified, bioAdded, skillsAdded, portfolioAdded, clientPrefsAdded, freelancerPrefsAdded } =
     completeness.checklist;
+
+  const isClient = user.role === "client" || (user.role === "both" && user.activeRoleView === "client");
 
   // Recommended skills for quick add
   const suggestedSkills = ["TypeScript", "Next.js", "AI Integrations", "Figma", "TailwindCSS", "Node.js"].filter(
@@ -255,7 +283,7 @@ export function CompletenessWidget() {
                   className={bioAdded ? "text-[var(--color-mint)]" : "text-white/10"}
                 />
                 <span className={`text-xs ${bioAdded ? "text-[var(--color-muted)]" : "font-medium text-white"}`}>
-                  Write Biography About Section
+                  {isClient ? "Write Biography (Client-Focused Bio)" : "Write Biography About Section"}
                 </span>
               </div>
               <div>{expandedItem === "bio" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</div>
@@ -273,7 +301,7 @@ export function CompletenessWidget() {
                     <textarea
                       value={bioText}
                       onChange={(e) => setBioText(e.target.value)}
-                      placeholder="Share your expertise, achievements, and core philosophy..."
+                      placeholder={isClient ? "Share your company background, hiring culture, and project values..." : "Share your expertise, achievements, and core philosophy..."}
                       rows={3}
                       className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[var(--color-warm)]/30 resize-none"
                     />
@@ -300,169 +328,305 @@ export function CompletenessWidget() {
             </AnimatePresence>
           </div>
 
-          {/* 4. SKILLS */}
-          <div className="border border-white/5 rounded-xl overflow-hidden bg-white/[0.005]">
-            <button
-              onClick={() => toggleExpand("skills")}
-              className="w-full flex items-center justify-between p-3 text-left transition-colors hover:bg-white/[0.01]"
-            >
-              <div className="flex items-center gap-3">
-                <CheckCircle
-                  size={16}
-                  className={skillsAdded ? "text-[var(--color-mint)]" : "text-white/10"}
-                />
-                <span className={`text-xs ${skillsAdded ? "text-[var(--color-muted)]" : "font-medium text-white"}`}>
-                  Core Skills Tagging ({user.skills.length}/3)
-                </span>
-              </div>
-              <div>{expandedItem === "skills" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</div>
-            </button>
+          {/* 4. CLIENT ONLY: COMPANY / HIRING PREFERENCES */}
+          {isClient && (
+            <div className="border border-white/5 rounded-xl overflow-hidden bg-white/[0.005]">
+              <button
+                onClick={() => toggleExpand("clientPrefs")}
+                className="w-full flex items-center justify-between p-3 text-left transition-colors hover:bg-white/[0.01]"
+              >
+                <div className="flex items-center gap-3">
+                  <CheckCircle
+                    size={16}
+                    className={clientPrefsAdded ? "text-[var(--color-mint)]" : "text-white/10"}
+                  />
+                  <span className={`text-xs ${clientPrefsAdded ? "text-[var(--color-muted)]" : "font-medium text-white"}`}>
+                    Company / Hiring Preferences (Optional)
+                  </span>
+                </div>
+                <div>{expandedItem === "clientPrefs" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</div>
+              </button>
 
-            <AnimatePresence>
-              {expandedItem === "skills" && (
-                <motion.div
-                  initial={{ height: 0 }}
-                  animate={{ height: "auto" }}
-                  exit={{ height: 0 }}
-                  className="overflow-hidden bg-white/[0.01]"
-                >
-                  <div className="p-4 border-t border-white/5 space-y-4">
-                    <form onSubmit={handleAddSkill} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={skillInput}
-                        onChange={(e) => setSkillInput(e.target.value)}
-                        placeholder="Add skill tag (e.g. React)..."
-                        className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-[var(--color-warm)]/30"
-                      />
-                      <button
-                        type="submit"
-                        className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </form>
-
-                    {/* Skill tags */}
-                    {user.skills.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {user.skills.map((skill) => (
-                          <span
-                            key={skill}
-                            className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[var(--color-text)]"
-                          >
-                            {skill}
-                            <button
-                              type="button"
-                              onClick={() => removeSkill(skill)}
-                              className="text-[var(--color-muted)] hover:text-red-400"
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
+              <AnimatePresence>
+                {expandedItem === "clientPrefs" && (
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: "auto" }}
+                    exit={{ height: 0 }}
+                    className="overflow-hidden bg-white/[0.01]"
+                  >
+                    <div className="p-4 border-t border-white/5 space-y-3">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
+                          Company Name
+                        </label>
+                        <input
+                          type="text"
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                          placeholder="e.g. Acme Corp"
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[var(--color-warm)]/30"
+                        />
                       </div>
-                    )}
+                      <div className="space-y-1">
+                        <label className="block text-[9px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
+                          Hiring Preferences
+                        </label>
+                        <input
+                          type="text"
+                          value={hiringPreferences}
+                          onChange={(e) => setHiringPreferences(e.target.value)}
+                          placeholder="e.g. Full-time, Remote, React developers"
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[var(--color-warm)]/30"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSaveClientPrefs}
+                        className="w-full py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-all"
+                      >
+                        Save Preferences
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
 
-                    {/* Suggested skills */}
-                    {suggestedSkills.length > 0 && (
-                      <div>
-                        <div className="text-[10px] text-[var(--color-muted)] mb-2 font-mono">Suggested skills:</div>
-                        <div className="flex flex-wrap gap-1">
-                          {suggestedSkills.slice(0, 4).map((s) => (
-                            <button
-                              key={s}
-                              type="button"
-                              onClick={() => handleQuickAddSkill(s)}
-                              className="text-[9px] px-2 py-0.5 rounded border border-white/5 text-[var(--color-muted)] hover:text-white hover:border-white/10 hover:bg-white/[0.01]"
+          {/* 4. FREELANCER ONLY: CORE SKILLS TAGGING */}
+          {!isClient && (
+            <div className="border border-white/5 rounded-xl overflow-hidden bg-white/[0.005]">
+              <button
+                onClick={() => toggleExpand("skills")}
+                className="w-full flex items-center justify-between p-3 text-left transition-colors hover:bg-white/[0.01]"
+              >
+                <div className="flex items-center gap-3">
+                  <CheckCircle
+                    size={16}
+                    className={skillsAdded ? "text-[var(--color-mint)]" : "text-white/10"}
+                  />
+                  <span className={`text-xs ${skillsAdded ? "text-[var(--color-muted)]" : "font-medium text-white"}`}>
+                    Core Skills Tagging ({user.skills.length}/3)
+                  </span>
+                </div>
+                <div>{expandedItem === "skills" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</div>
+              </button>
+
+              <AnimatePresence>
+                {expandedItem === "skills" && (
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: "auto" }}
+                    exit={{ height: 0 }}
+                    className="overflow-hidden bg-white/[0.01]"
+                  >
+                    <div className="p-4 border-t border-white/5 space-y-4">
+                      <form onSubmit={handleAddSkill} className="flex gap-2">
+                        <input
+                          type="text"
+                          value={skillInput}
+                          onChange={(e) => setSkillInput(e.target.value)}
+                          placeholder="Add skill tag (e.g. React)..."
+                          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-[var(--color-warm)]/30"
+                        />
+                        <button
+                          type="submit"
+                          className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </form>
+
+                      {/* Skill tags */}
+                      {user.skills.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {user.skills.map((skill) => (
+                            <span
+                              key={skill}
+                              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[var(--color-text)]"
                             >
-                              + {s}
+                              {skill}
+                              <button
+                                type="button"
+                                onClick={() => removeSkill(skill)}
+                                className="text-[var(--color-muted)] hover:text-red-400"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Suggested skills */}
+                      {suggestedSkills.length > 0 && (
+                        <div>
+                          <div className="text-[10px] text-[var(--color-muted)] mb-2 font-mono">Suggested skills:</div>
+                          <div className="flex flex-wrap gap-1">
+                            {suggestedSkills.slice(0, 4).map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => handleQuickAddSkill(s)}
+                                className="text-[9px] px-2 py-0.5 rounded border border-white/5 text-[var(--color-muted)] hover:text-white hover:border-white/10 hover:bg-white/[0.01]"
+                              >
+                                + {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* 5. FREELANCER ONLY: PORTFOLIO */}
+          {!isClient && (
+            <div className="border border-white/5 rounded-xl overflow-hidden bg-white/[0.005]">
+              <button
+                onClick={() => toggleExpand("portfolio")}
+                className="w-full flex items-center justify-between p-3 text-left transition-colors hover:bg-white/[0.01]"
+              >
+                <div className="flex items-center gap-3">
+                  <CheckCircle
+                    size={16}
+                    className={portfolioAdded ? "text-[var(--color-mint)]" : "text-white/10"}
+                  />
+                  <span className={`text-xs ${portfolioAdded ? "text-[var(--color-muted)]" : "font-medium text-white"}`}>
+                    Showcase Work Portfolio ({user.portfolioItems.length}/1)
+                  </span>
+                </div>
+                <div>{expandedItem === "portfolio" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</div>
+              </button>
+
+              <AnimatePresence>
+                {expandedItem === "portfolio" && (
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: "auto" }}
+                    exit={{ height: 0 }}
+                    className="overflow-hidden bg-white/[0.01]"
+                  >
+                    <div className="p-4 border-t border-white/5 space-y-4">
+                      <div className="space-y-2">
+                        <label className="block text-[9px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
+                          Project Name
+                        </label>
+                        <input
+                          type="text"
+                          value={portfolioTitle}
+                          onChange={(e) => setPortfolioTitle(e.target.value)}
+                          placeholder="e.g. Helix AI Sidebar redesign"
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-[var(--color-warm)]/30"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-[9px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
+                          Domain Category
+                        </label>
+                        <div className="grid grid-cols-4 gap-1">
+                          {["Product", "Fintech", "AI", "SaaS"].map((cat) => (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => setPortfolioCategory(cat)}
+                              className={`py-1 rounded text-[10px] border transition-all ${
+                                portfolioCategory === cat
+                                  ? "border-[var(--color-warm)] bg-[var(--color-warm)]/10 text-white"
+                                  : "border-white/5 bg-white/[0.01] text-[var(--color-muted)] hover:border-white/10"
+                              }`}
+                            >
+                              {cat}
                             </button>
                           ))}
                         </div>
                       </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
 
-          {/* 5. PORTFOLIO ITEMS */}
-          <div className="border border-white/5 rounded-xl overflow-hidden bg-white/[0.005]">
-            <button
-              onClick={() => toggleExpand("portfolio")}
-              className="w-full flex items-center justify-between p-3 text-left transition-colors hover:bg-white/[0.01]"
-            >
-              <div className="flex items-center gap-3">
-                <CheckCircle
-                  size={16}
-                  className={portfolioAdded ? "text-[var(--color-mint)]" : "text-white/10"}
-                />
-                <span className={`text-xs ${portfolioAdded ? "text-[var(--color-muted)]" : "font-medium text-white"}`}>
-                  Showcase Work Portfolio ({user.portfolioItems.length}/1)
-                </span>
-              </div>
-              <div>{expandedItem === "portfolio" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</div>
-            </button>
-
-            <AnimatePresence>
-              {expandedItem === "portfolio" && (
-                <motion.div
-                  initial={{ height: 0 }}
-                  animate={{ height: "auto" }}
-                  exit={{ height: 0 }}
-                  className="overflow-hidden bg-white/[0.01]"
-                >
-                  <div className="p-4 border-t border-white/5 space-y-4">
-                    <div className="space-y-2">
-                      <label className="block text-[9px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
-                        Project Name
-                      </label>
-                      <input
-                        type="text"
-                        value={portfolioTitle}
-                        onChange={(e) => setPortfolioTitle(e.target.value)}
-                        placeholder="e.g. Helix AI Sidebar redesign"
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-[var(--color-warm)]/30"
-                      />
+                      <button
+                        type="button"
+                        onClick={handleAddPortfolio}
+                        disabled={!portfolioTitle.trim()}
+                        className="w-full py-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:hover:bg-white/10 text-xs font-semibold text-white transition-all"
+                      >
+                        Publish Work to Portfolio
+                      </button>
                     </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
 
-                    <div className="space-y-2">
-                      <label className="block text-[9px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
-                        Domain Category
-                      </label>
-                      <div className="grid grid-cols-4 gap-1">
-                        {["Product", "Fintech", "AI", "SaaS"].map((cat) => (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={() => setPortfolioCategory(cat)}
-                            className={`py-1 rounded text-[10px] border transition-all ${
-                              portfolioCategory === cat
-                                ? "border-[var(--color-warm)] bg-[var(--color-warm)]/10 text-white"
-                                : "border-white/5 bg-white/[0.01] text-[var(--color-muted)] hover:border-white/10"
-                            }`}
-                          >
-                            {cat}
-                          </button>
-                        ))}
+          {/* 6. FREELANCER ONLY: EXPERIENCE / AVAILABILITY */}
+          {!isClient && (
+            <div className="border border-white/5 rounded-xl overflow-hidden bg-white/[0.005]">
+              <button
+                onClick={() => toggleExpand("freelancerPrefs")}
+                className="w-full flex items-center justify-between p-3 text-left transition-colors hover:bg-white/[0.01]"
+              >
+                <div className="flex items-center gap-3">
+                  <CheckCircle
+                    size={16}
+                    className={freelancerPrefsAdded ? "text-[var(--color-mint)]" : "text-white/10"}
+                  />
+                  <span className={`text-xs ${freelancerPrefsAdded ? "text-[var(--color-muted)]" : "font-medium text-white"}`}>
+                    Experience / Availability
+                  </span>
+                </div>
+                <div>{expandedItem === "freelancerPrefs" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</div>
+              </button>
+
+              <AnimatePresence>
+                {expandedItem === "freelancerPrefs" && (
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: "auto" }}
+                    exit={{ height: 0 }}
+                    className="overflow-hidden bg-white/[0.01]"
+                  >
+                    <div className="p-4 border-t border-white/5 space-y-3">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
+                          Years of Experience
+                        </label>
+                        <input
+                          type="text"
+                          value={experienceYears}
+                          onChange={(e) => setExperienceYears(e.target.value)}
+                          placeholder="e.g. 5 years"
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[var(--color-warm)]/30"
+                        />
                       </div>
+                      <div className="space-y-1">
+                        <label className="block text-[9px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
+                          Availability Status
+                        </label>
+                        <input
+                          type="text"
+                          value={availability}
+                          onChange={(e) => setAvailability(e.target.value)}
+                          placeholder="e.g. 20 hrs/week, Open to work"
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[var(--color-warm)]/30"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSaveFreelancerPrefs}
+                        className="w-full py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-all"
+                      >
+                        Save Experience & Availability
+                      </button>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={handleAddPortfolio}
-                      disabled={!portfolioTitle.trim()}
-                      className="w-full py-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:hover:bg-white/10 text-xs font-semibold text-white transition-all"
-                    >
-                      Publish Work to Portfolio
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
       </div>
 

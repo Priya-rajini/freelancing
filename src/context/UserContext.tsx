@@ -33,6 +33,10 @@ export interface UserProfile {
     value: string | null;
   };
   isRegistered: boolean;
+  companyName?: string;
+  hiringPreferences?: string;
+  experienceYears?: string;
+  availability?: string;
 }
 
 interface UserContextType {
@@ -47,6 +51,7 @@ interface UserContextType {
   addPortfolioItem: (title: string, category: string, image: string) => void;
   startVerification: (method: VerificationMethod, value: string) => Promise<void>;
   resetVerification: () => void;
+  updateProfileFields: (fields: Partial<UserProfile>) => void;
   completeness: {
     score: number;
     checklist: {
@@ -55,6 +60,8 @@ interface UserContextType {
       bioAdded: boolean;
       skillsAdded: boolean;
       portfolioAdded: boolean;
+      clientPrefsAdded: boolean;
+      freelancerPrefsAdded: boolean;
     };
   };
 }
@@ -89,6 +96,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         value: null,
       },
       isRegistered: false, // Default is not registered
+      companyName: "",
+      hiringPreferences: "",
+      experienceYears: "",
+      availability: "",
     };
   });
 
@@ -135,6 +146,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         value: null,
       },
       isRegistered: false,
+      companyName: "",
+      hiringPreferences: "",
+      experienceYears: "",
+      availability: "",
     });
     localStorage.removeItem("skillsync_user_profile");
   };
@@ -231,32 +246,69 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
+  const updateProfileFields = (fields: Partial<UserProfile>) => {
+    setUser((prev) => ({ ...prev, ...fields }));
+  };
+
+  const isClient = user.role === "client" || (user.role === "both" && user.activeRoleView === "client");
+
   const roleSelected = user.role !== null;
   const verified = user.verification.status === "verified";
   const bioAdded = user.bio.trim().length > 0;
-  const skillsAdded = user.skills.length >= 3;
-  const portfolioAdded = user.portfolioItems.length >= 1;
 
-  let score = 0;
-  if (roleSelected) score += 20;
-  if (verified) score += 30;
-  if (bioAdded) score += 15;
-  
-  const skillsScore = Math.min(user.skills.length * 5, 15);
-  score += skillsScore;
+  let completeness;
 
-  if (portfolioAdded) score += 20;
+  if (isClient) {
+    const clientPrefsAdded = (user.companyName?.trim().length || 0) > 0 || (user.hiringPreferences?.trim().length || 0) > 0;
+    
+    let completedCount = 0;
+    if (roleSelected) completedCount++;
+    if (verified) completedCount++;
+    if (bioAdded) completedCount++;
+    if (clientPrefsAdded) completedCount++;
 
-  const completeness = {
-    score,
-    checklist: {
-      roleSelected,
-      verified,
-      bioAdded,
-      skillsAdded,
-      portfolioAdded,
-    },
-  };
+    const score = Math.round((completedCount / 4) * 100);
+
+    completeness = {
+      score,
+      checklist: {
+        roleSelected,
+        verified,
+        bioAdded,
+        skillsAdded: false,
+        portfolioAdded: false,
+        clientPrefsAdded,
+        freelancerPrefsAdded: false,
+      },
+    };
+  } else {
+    const skillsAdded = user.skills.length >= 3;
+    const portfolioAdded = user.portfolioItems.length >= 1;
+    const freelancerPrefsAdded = (user.experienceYears?.trim().length || 0) > 0 || (user.availability?.trim().length || 0) > 0;
+
+    let completedCount = 0;
+    if (roleSelected) completedCount++;
+    if (verified) completedCount++;
+    if (bioAdded) completedCount++;
+    if (skillsAdded) completedCount++;
+    if (portfolioAdded) completedCount++;
+    if (freelancerPrefsAdded) completedCount++;
+
+    const score = Math.round((completedCount / 6) * 100);
+
+    completeness = {
+      score,
+      checklist: {
+        roleSelected,
+        verified,
+        bioAdded,
+        skillsAdded,
+        portfolioAdded,
+        clientPrefsAdded: false,
+        freelancerPrefsAdded,
+      },
+    };
+  }
 
   return (
     <UserContext.Provider
@@ -272,6 +324,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         addPortfolioItem,
         startVerification,
         resetVerification,
+        updateProfileFields,
         completeness,
       }}
     >
