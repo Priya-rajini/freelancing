@@ -33,6 +33,14 @@ function normalizeSkill(skill: string) {
   return skill.trim().toLowerCase();
 }
 
+function skillMatchesRequired(required: string, freelancerSkills: string[]) {
+  const req = normalizeSkill(required);
+  return freelancerSkills.some((s) => {
+    const skill = normalizeSkill(s);
+    return skill === req || skill.includes(req) || req.includes(skill);
+  });
+}
+
 export function parseExperienceYears(value?: string): number {
   if (!value?.trim()) return 0;
   const match = value.match(/\d+/);
@@ -45,9 +53,7 @@ export function computeMatch(project: Project, freelancer: TalentProfile): Match
   const matchedSkills =
     requiredSkills.length === 0
       ? []
-      : requiredSkills.filter((req) =>
-          freelancer.skills.some((s) => normalizeSkill(s) === normalizeSkill(req))
-        );
+      : requiredSkills.filter((req) => skillMatchesRequired(req, freelancer.skills));
 
   const matchingSkillsCount = matchedSkills.length;
   let score = 0;

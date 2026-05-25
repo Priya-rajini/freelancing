@@ -24,8 +24,12 @@ import {
   UserPlus,
   MapPin,
   Palette,
+  LogIn,
+  Mail,
+  Lock,
+  LogOut,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 
 const navItems = [
   { icon: LayoutGrid, label: "Overview", active: true },
@@ -43,7 +47,16 @@ const colorPalettes = [
 ];
 
 export function Dashboard() {
-  const { user, signup, setRole, setActiveRoleView } = useUser();
+  const { user, signup, login, logout, setRole, setActiveRoleView } = useUser();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [authMode, setAuthMode] = useState<"signup" | "login">(
+    searchParams.get("auth") === "login" ? "login" : "signup"
+  );
+
+  useEffect(() => {
+    setAuthMode(searchParams.get("auth") === "login" ? "login" : "signup");
+  }, [searchParams]);
   const { projects: clientProjects } = useProjects();
   const { talentPool, myTalentId } = useTalent();
   const [aiInput, setAiInput] = useState("");
@@ -80,8 +93,13 @@ export function Dashboard() {
   // Signup fields
   const [signupName, setSignupName] = useState("");
   const [signupLocation, setSignupLocation] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
   const [signupColor, setSignupColor] = useState("#e8a87c");
-  const [signupError, setSignupError] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [authError, setAuthError] = useState("");
 
   const sendAi = () => {
     if (!aiInput.trim()) return;
@@ -98,16 +116,47 @@ export function Dashboard() {
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    setSignupError("");
+    setAuthError("");
     if (!signupName.trim()) {
-      setSignupError("Please enter your full name.");
+      setAuthError("Please enter your full name.");
       return;
     }
     if (!signupLocation.trim()) {
-      setSignupError("Please enter your location.");
+      setAuthError("Please enter your location.");
       return;
     }
-    signup(signupName.trim(), signupLocation.trim(), signupColor);
+    if (!signupEmail.trim()) {
+      setAuthError("Please enter your email.");
+      return;
+    }
+    if (signupPassword.length < 6) {
+      setAuthError("Password must be at least 6 characters.");
+      return;
+    }
+    if (signupPassword !== signupConfirmPassword) {
+      setAuthError("Passwords do not match.");
+      return;
+    }
+    const err = signup(
+      signupName.trim(),
+      signupLocation.trim(),
+      signupColor,
+      signupEmail.trim(),
+      signupPassword
+    );
+    if (err) setAuthError(err);
+  };
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    const err = login(loginEmail.trim(), loginPassword);
+    if (err) setAuthError(err);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/dashboard?auth=login");
   };
 
   const handleRoleSelect = (selectedRole: UserRole) => {
@@ -122,9 +171,11 @@ export function Dashboard() {
   };
 
   // -------------------------------------------------------------
-  // STATE A: NOT REGISTERED (SIGN UP FLOW)
+  // STATE A: NOT REGISTERED (SIGN UP / LOGIN)
   // -------------------------------------------------------------
   if (!user.isRegistered) {
+    const accentColor = authMode === "login" ? "#7dd3fc" : signupColor;
+
     return (
       <div className="pt-28 pb-20 min-h-screen flex items-center justify-center px-4">
         <div className="max-w-md w-full">
@@ -133,99 +184,254 @@ export function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="glass-strong rounded-2xl p-6 md:p-8 border border-white/10 shadow-2xl relative overflow-hidden"
           >
-            {/* Ambient Background Glows */}
             <div
               className="absolute -top-24 -right-24 h-48 w-48 rounded-full blur-[80px] opacity-20 transition-colors duration-500"
-              style={{ backgroundColor: signupColor }}
+              style={{ backgroundColor: accentColor }}
             />
 
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-5">
               <div
                 className="h-10 w-10 rounded-lg flex items-center justify-center transition-colors duration-300"
-                style={{ backgroundColor: `${signupColor}22`, border: `1px solid ${signupColor}44`, color: signupColor }}
+                style={{
+                  backgroundColor: `${accentColor}22`,
+                  border: `1px solid ${accentColor}44`,
+                  color: accentColor,
+                }}
               >
-                <UserPlus size={20} />
+                {authMode === "login" ? <LogIn size={20} /> : <UserPlus size={20} />}
               </div>
               <div>
-                <h1 className="text-display text-2xl font-semibold text-white">Create Account</h1>
-                <p className="text-[var(--color-muted)] text-xs">Set up your SkillSync credentials</p>
+                <h1 className="text-display text-2xl font-semibold text-white">
+                  {authMode === "login" ? "Welcome back" : "Create Account"}
+                </h1>
+                <p className="text-[var(--color-muted)] text-xs">
+                  {authMode === "login"
+                    ? "Log in to your SkillSync workspace"
+                    : "Set up your SkillSync credentials"}
+                </p>
               </div>
             </div>
 
-            <form onSubmit={handleRegister} className="space-y-5">
-              {/* Name */}
-              <div>
-                <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={signupName}
-                  onChange={(e) => setSignupName(e.target.value)}
-                  placeholder="e.g. Sarah Jenkins"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
-                />
-              </div>
+            <div className="flex p-1 rounded-xl bg-white/5 border border-white/10 mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("signup");
+                  setAuthError("");
+                }}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                  authMode === "signup" ? "bg-white/10 text-white" : "text-[var(--color-muted)]"
+                }`}
+              >
+                Sign up
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthError("");
+                }}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                  authMode === "login" ? "bg-white/10 text-white" : "text-[var(--color-muted)]"
+                }`}
+              >
+                Log in
+              </button>
+            </div>
 
-              {/* Location */}
-              <div>
-                <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
-                  Location / City
-                </label>
-                <div className="relative">
-                  <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+            {authMode === "login" ? (
+              <form onSubmit={handleLogin} className="space-y-5">
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="email"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="you@email.com"
+                      autoComplete="email"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="password"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="Your password"
+                      autoComplete="current-password"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
+                </div>
+                {authError && (
+                  <div className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 p-3 rounded-lg flex items-center gap-2">
+                    <span className="shrink-0">•</span>
+                    <span>{authError}</span>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl text-black font-semibold text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2 mt-2"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  <LogIn size={16} /> Log in
+                </button>
+                <p className="text-center text-xs text-[var(--color-muted)]">
+                  New here?{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("signup");
+                      setAuthError("");
+                    }}
+                    className="text-[var(--color-warm)] hover:underline"
+                  >
+                    Create an account
+                  </button>
+                </p>
+              </form>
+            ) : (
+              <form onSubmit={handleRegister} className="space-y-5">
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Full Name
+                  </label>
                   <input
                     type="text"
-                    value={signupLocation}
-                    onChange={(e) => setSignupLocation(e.target.value)}
-                    placeholder="e.g. San Francisco, CA"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    value={signupName}
+                    onChange={(e) => setSignupName(e.target.value)}
+                    placeholder="e.g. Sarah Jenkins"
+                    autoComplete="name"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
                   />
                 </div>
-              </div>
-
-              {/* Color Swatch */}
-              <div>
-                <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 flex items-center gap-1.5 font-mono">
-                  <Palette size={13} /> Profile Theme Color
-                </label>
-                <div className="flex items-center gap-3 py-1">
-                  {colorPalettes.map((pal) => (
-                    <button
-                      key={pal.value}
-                      type="button"
-                      onClick={() => setSignupColor(pal.value)}
-                      title={pal.name}
-                      className={`h-7 w-7 rounded-full transition-all border-2 relative flex items-center justify-center`}
-                      style={{
-                        backgroundColor: pal.value,
-                        borderColor: signupColor === pal.value ? "white" : "transparent",
-                        transform: signupColor === pal.value ? "scale(1.1)" : "scale(1)",
-                      }}
-                    >
-                      {signupColor === pal.value && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-black" />
-                      )}
-                    </button>
-                  ))}
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="email"
+                      value={signupEmail}
+                      onChange={(e) => setSignupEmail(e.target.value)}
+                      placeholder="you@email.com"
+                      autoComplete="email"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
                 </div>
-              </div>
-
-              {signupError && (
-                <div className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 p-3 rounded-lg flex items-center gap-2">
-                  <span className="shrink-0">•</span>
-                  <span>{signupError}</span>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Location / City
+                  </label>
+                  <div className="relative">
+                    <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="text"
+                      value={signupLocation}
+                      onChange={(e) => setSignupLocation(e.target.value)}
+                      placeholder="e.g. San Francisco, CA"
+                      autoComplete="address-level2"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
                 </div>
-              )}
-
-              <button
-                type="submit"
-                className="w-full py-3 rounded-xl bg-[var(--color-warm)] text-black font-semibold text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2 mt-4"
-                style={{ backgroundColor: signupColor }}
-              >
-                Get Started
-              </button>
-            </form>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="password"
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      placeholder="At least 6 characters"
+                      autoComplete="new-password"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Confirm Password
+                  </label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="password"
+                      value={signupConfirmPassword}
+                      onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                      placeholder="Repeat password"
+                      autoComplete="new-password"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 flex items-center gap-1.5 font-mono">
+                    <Palette size={13} /> Profile Theme Color
+                  </label>
+                  <div className="flex items-center gap-3 py-1">
+                    {colorPalettes.map((pal) => (
+                      <button
+                        key={pal.value}
+                        type="button"
+                        onClick={() => setSignupColor(pal.value)}
+                        title={pal.name}
+                        className="h-7 w-7 rounded-full transition-all border-2 relative flex items-center justify-center"
+                        style={{
+                          backgroundColor: pal.value,
+                          borderColor: signupColor === pal.value ? "white" : "transparent",
+                          transform: signupColor === pal.value ? "scale(1.1)" : "scale(1)",
+                        }}
+                      >
+                        {signupColor === pal.value && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-black" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {authError && (
+                  <div className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 p-3 rounded-lg flex items-center gap-2">
+                    <span className="shrink-0">•</span>
+                    <span>{authError}</span>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl text-black font-semibold text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2 mt-2"
+                  style={{ backgroundColor: signupColor }}
+                >
+                  Get Started
+                </button>
+                <p className="text-center text-xs text-[var(--color-muted)]">
+                  Already have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("login");
+                      setAuthError("");
+                    }}
+                    className="text-[var(--color-warm)] hover:underline"
+                  >
+                    Log in
+                  </button>
+                </p>
+              </form>
+            )}
           </motion.div>
         </div>
       </div>
@@ -328,6 +534,15 @@ export function Dashboard() {
               </div>
             </motion.div>
           </div>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-10 inline-flex items-center gap-2 text-xs text-[var(--color-muted)] hover:text-red-400 transition-colors"
+          >
+            <LogOut size={14} />
+            Log out and use a different account
+          </button>
         </div>
       </div>
     );
@@ -359,7 +574,7 @@ export function Dashboard() {
           </button>
         ))}
 
-        <div className="mt-auto pt-6 border-t border-white/5">
+        <div className="mt-auto pt-6 border-t border-white/5 space-y-2">
           <Link
             to="/portfolio"
             className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/5 text-xs text-[var(--color-muted)] hover:text-white transition-all hover:bg-white/[0.04]"
@@ -367,6 +582,14 @@ export function Dashboard() {
             <span className="font-semibold">My Portfolio</span>
             <ChevronRight size={14} />
           </Link>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 p-2.5 rounded-lg border border-red-500/20 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            <LogOut size={14} />
+            <span className="font-semibold">Log out</span>
+          </button>
         </div>
       </aside>
 
@@ -419,9 +642,19 @@ export function Dashboard() {
           )}
 
           {/* Heading */}
-          <h1 className="text-display text-2xl md:text-3xl font-medium">
-            Good evening, {user.name.split(" ")[0]}
-          </h1>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <h1 className="text-display text-2xl md:text-3xl font-medium">
+              Good evening, {user.name.split(" ")[0]}
+            </h1>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="lg:hidden flex items-center gap-2 px-3 py-2 rounded-xl border border-red-500/25 text-xs text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+            >
+              <LogOut size={14} />
+              Log out
+            </button>
+          </div>
           <p className="text-[var(--color-muted)] mt-1.5 text-sm flex items-center gap-2">
             {isFreelancerView ? (
               <>

@@ -2,7 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useProjects } from "../context/ProjectContext";
+import { useTalent } from "../context/TalentContext";
 import { useUser } from "../context/UserContext";
+import { computeMatch } from "../utils/matching";
 import { RevealSection } from "../components/ui/RevealSection";
 import { ArrowLeft, X, FileText, Send } from "lucide-react";
 
@@ -42,6 +44,7 @@ function formatCommentTime(iso: string) {
 export function ProjectDetail() {
   const { id } = useParams();
   const { projects, addComment } = useProjects();
+  const { getTalentById } = useTalent();
   const { user } = useUser();
   const project = projects.find((p) => p.id === id);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -49,6 +52,7 @@ export function ProjectDetail() {
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
   const comments = project?.comments ?? [];
+  const proposals = project?.proposals ?? [];
   const authorName = user.isRegistered && user.name.trim() ? user.name.trim() : "You";
 
   useEffect(() => {
@@ -224,10 +228,60 @@ export function ProjectDetail() {
                   <X size={20} />
                 </button>
               </div>
-              <div className="p-6 text-sm text-[var(--color-muted)]">
-                {project.proposalsCount === 0
-                  ? "No proposals yet. Matches from your dashboard will appear here as freelancers apply."
-                  : `${project.proposalsCount} proposal(s) on file.`}
+              <div className="p-6 space-y-4">
+                {proposals.length === 0 ? (
+                  <p className="text-sm text-[var(--color-muted)]">
+                    No proposals yet. Matches from your dashboard will appear here as freelancers apply.
+                  </p>
+                ) : (
+                  proposals.map((proposal) => {
+                    const freelancer = getTalentById(proposal.freelancerId);
+                    const liveScore = freelancer
+                      ? computeMatch(project, freelancer).matchScore
+                      : proposal.matchScore;
+                    return (
+                      <div
+                        key={proposal.id}
+                        className="glass rounded-xl p-5 border border-white/5 hover:border-[var(--color-warm)]/20 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className="h-10 w-10 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+                              style={{
+                                background: `${freelancer?.color ?? "#6ee7b7"}22`,
+                                color: freelancer?.color ?? "#6ee7b7",
+                              }}
+                            >
+                              {freelancer?.avatar ?? "?"}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">
+                                {freelancer?.name ?? "Freelancer"}
+                              </p>
+                              <p className="text-[11px] text-[var(--color-muted)] truncate">
+                                {freelancer?.headline ?? "Applicant"}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-sm font-bold text-[var(--color-mint)] shrink-0">
+                            {liveScore}%
+                          </span>
+                        </div>
+                        <p className="text-sm text-[var(--color-muted)] mt-3 leading-relaxed">
+                          {proposal.coverMessage}
+                        </p>
+                        <Link
+                          to={`/ai/proposal-evaluator?freelancerId=${proposal.freelancerId}&projectId=${project.id}`}
+                          onClick={() => setDrawerOpen(false)}
+                          className="inline-block mt-3 text-xs text-[var(--color-warm)] hover:underline"
+                        >
+                          Evaluate proposal →
+                        </Link>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </motion.div>
           </>

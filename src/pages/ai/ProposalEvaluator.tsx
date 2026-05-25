@@ -1,43 +1,14 @@
-import { useMemo } from "react";
-import { motion } from "framer-motion";
 import { RevealSection } from "../../components/ui/RevealSection";
+import { MatchMetricBars } from "../../components/ui/MatchMetricBars";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { useTalent } from "../../context/TalentContext";
-import { useProjects } from "../../context/ProjectContext";
-import {
-  buildCandidateSummary,
-  buildProposalMetrics,
-  computeMatch,
-} from "../../utils/matching";
-
-const metricLabels = [
-  { key: "skillsOverlap" as const, label: "Skills overlap" },
-  { key: "experienceFit" as const, label: "Experience fit" },
-  { key: "profileStrength" as const, label: "Profile strength" },
-  { key: "overall" as const, label: "Overall match" },
-];
+import { useLiveEvaluation } from "../../hooks/useLiveEvaluation";
 
 export function ProposalEvaluator() {
   const [searchParams] = useSearchParams();
   const freelancerId = searchParams.get("freelancerId");
   const projectId = searchParams.get("projectId");
-  const { getTalentById } = useTalent();
-  const { projects } = useProjects();
-
-  const evaluation = useMemo(() => {
-    if (!freelancerId || !projectId) return null;
-
-    const freelancer = getTalentById(freelancerId);
-    const project = projects.find((p) => p.id === projectId);
-    if (!freelancer || !project) return null;
-
-    const match = computeMatch(project, freelancer);
-    const metrics = buildProposalMetrics(project, match);
-    const summary = buildCandidateSummary(project, match, metrics);
-
-    return { freelancer, project, match, metrics, summary };
-  }, [freelancerId, projectId, getTalentById, projects]);
+  const evaluation = useLiveEvaluation(projectId, freelancerId);
 
   if (!freelancerId || !projectId) {
     return (
@@ -105,36 +76,24 @@ export function ProposalEvaluator() {
                 ? ` · ${freelancer.availability}`
                 : ""}
             </p>
+            {match.matchedSkills.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                {match.matchedSkills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-mint)]/10 text-[var(--color-mint)] border border-[var(--color-mint)]/20"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </RevealSection>
 
         <RevealSection delay={0.15} className="mt-6">
           <div className="glass rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-sm font-medium text-white">Match metrics</h2>
-              <span className="text-2xl font-bold text-[var(--color-warm)]">{match.matchScore}%</span>
-            </div>
-            <div className="space-y-5">
-              {metricLabels.map((item, i) => {
-                const value = metrics[item.key];
-                return (
-                  <div key={item.key}>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>{item.label}</span>
-                      <span className="text-[var(--color-muted)]">{value}%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                      <motion.div
-                        className="h-full rounded-full bg-gradient-to-r from-[var(--color-warm)] to-[var(--color-mint)]"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${value}%` }}
-                        transition={{ delay: 0.1 + i * 0.08, duration: 0.6 }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <MatchMetricBars metrics={metrics} headlineScore={match.matchScore} />
           </div>
         </RevealSection>
       </div>
