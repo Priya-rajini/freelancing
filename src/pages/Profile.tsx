@@ -19,7 +19,7 @@ export function Profile() {
   const [isVerifyOpen, setIsVerifyOpen] = useState(false);
 
   // Determine if this is the active user's own profile page (Maya Chen)
-  const isOwnProfile = id === "maya-chen" || id === "me" || !id;
+  const isOwnProfile = user.isRegistered && (id === "maya-chen" || id === "me" || !id);
 
   const person = isOwnProfile
     ? {

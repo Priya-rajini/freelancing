@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import { computeProfileCompleteness, type ProfileCompletenessResult } from "../utils/profileCompleteness";
 
 export type UserRole = "freelancer" | "client" | "both" | null;
 export type RoleView = "freelancer" | "client";
@@ -76,7 +77,7 @@ function makeInitialProfile(): UserProfile {
     activeRoleView: "freelancer",
     bio: "",
     location: "",
-    skills: ["Figma"],
+    skills: [],
     verified: [],
     portfolioItems: [],
     verification: {
@@ -122,18 +123,13 @@ interface UserContextType {
   startVerification: (method: VerificationMethod, value: string) => Promise<void>;
   resetVerification: () => void;
   updateProfileFields: (fields: Partial<UserProfile>) => void;
-  completeness: {
-    score: number;
-    checklist: {
-      roleSelected: boolean;
-      verified: boolean;
-      bioAdded: boolean;
-      skillsAdded: boolean;
-      portfolioAdded: boolean;
+  completeness: ProfileCompletenessResult & {
+    checklist: ProfileCompletenessResult["checklist"] & {
       clientPrefsAdded: boolean;
       freelancerPrefsAdded: boolean;
     };
   };
+  isVerified: boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -144,7 +140,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as UserProfile;
-        return { ...makeInitialProfile(), ...parsed, email: parsed.email ?? "" };
+        return {
+          ...makeInitialProfile(),
+          ...parsed,
+          email: parsed.email ? normalizeEmail(parsed.email) : "",
+        };
       } catch (e) {
         console.error("Failed to parse saved user profile", e);
       }
@@ -327,65 +327,26 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setUser((prev) => ({ ...prev, ...fields }));
   };
 
-  const isClient = user.role === "client" || (user.role === "both" && user.activeRoleView === "client");
+  const baseCompleteness = useMemo(() => computeProfileCompleteness(user), [user]);
 
-  const roleSelected = user.role !== null;
-  const verified = user.verification.status === "verified";
-  const bioAdded = user.bio.trim().length > 0;
+  const clientPrefsAdded =
+    (user.companyName?.trim().length || 0) > 0 || (user.hiringPreferences?.trim().length || 0) > 0;
+  const freelancerPrefsAdded =
+    (user.experienceYears?.trim().length || 0) > 0 || (user.availability?.trim().length || 0) > 0;
 
-  let completeness;
-
-  if (isClient) {
-    const clientPrefsAdded = (user.companyName?.trim().length || 0) > 0 || (user.hiringPreferences?.trim().length || 0) > 0;
-    
-    let completedCount = 0;
-    if (roleSelected) completedCount++;
-    if (verified) completedCount++;
-    if (bioAdded) completedCount++;
-    if (clientPrefsAdded) completedCount++;
-
-    const score = Math.round((completedCount / 4) * 100);
-
-    completeness = {
-      score,
+  const completeness = useMemo(
+    () => ({
+      ...baseCompleteness,
       checklist: {
-        roleSelected,
-        verified,
-        bioAdded,
-        skillsAdded: false,
-        portfolioAdded: false,
+        ...baseCompleteness.checklist,
         clientPrefsAdded,
-        freelancerPrefsAdded: false,
-      },
-    };
-  } else {
-    const skillsAdded = user.skills.length >= 3;
-    const portfolioAdded = user.portfolioItems.length >= 1;
-    const freelancerPrefsAdded = (user.experienceYears?.trim().length || 0) > 0 || (user.availability?.trim().length || 0) > 0;
-
-    let completedCount = 0;
-    if (roleSelected) completedCount++;
-    if (verified) completedCount++;
-    if (bioAdded) completedCount++;
-    if (skillsAdded) completedCount++;
-    if (portfolioAdded) completedCount++;
-    if (freelancerPrefsAdded) completedCount++;
-
-    const score = Math.round((completedCount / 6) * 100);
-
-    completeness = {
-      score,
-      checklist: {
-        roleSelected,
-        verified,
-        bioAdded,
-        skillsAdded,
-        portfolioAdded,
-        clientPrefsAdded: false,
         freelancerPrefsAdded,
       },
-    };
-  }
+    }),
+    [baseCompleteness, clientPrefsAdded, freelancerPrefsAdded]
+  );
+
+  const isVerified = user.verification.status === "verified";
 
   return (
     <UserContext.Provider
@@ -404,6 +365,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         resetVerification,
         updateProfileFields,
         completeness,
+        isVerified,
       }}
     >
       {children}
