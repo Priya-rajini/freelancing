@@ -1,99 +1,196 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { Link, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { milestones } from "../data/mockData";
+import { useProjects } from "../context/ProjectContext";
+import { useTalent } from "../context/TalentContext";
+import { useUser } from "../context/UserContext";
+import { computeMatch } from "../utils/matching";
 import { RevealSection } from "../components/ui/RevealSection";
-import { X, MessageCircle, FileText } from "lucide-react";
+import { ArrowLeft, X, FileText, Send } from "lucide-react";
+
+function formatBudget(project: { projectType: string; budget: number }) {
+  return project.projectType === "Fixed"
+    ? `$${project.budget.toLocaleString()}`
+    : `$${project.budget}/hr`;
+}
+
+function formatDeadline(deadline: string) {
+  try {
+    return new Date(deadline).toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return deadline;
+  }
+}
+
+function formatCommentTime(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "Just now";
+
+  const diffMs = Date.now() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 
 export function ProjectDetail() {
+  const { id } = useParams();
+  const { projects, addComment } = useProjects();
+  const { getTalentById } = useTalent();
+  const { user } = useUser();
+  const project = projects.find((p) => p.id === id);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [commentInput, setCommentInput] = useState("");
+  const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  const comments = project?.comments ?? [];
+  const proposals = project?.proposals ?? [];
+  const authorName = user.isRegistered && user.name.trim() ? user.name.trim() : "You";
+
+  useEffect(() => {
+    commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [comments.length]);
+
+  const submitComment = () => {
+    if (!project || !commentInput.trim()) return;
+    addComment(project.id, authorName, commentInput);
+    setCommentInput("");
+  };
+
+  if (!project) {
+    return (
+      <div className="pt-28 pb-24 min-h-screen">
+        <div className="mx-auto max-w-[900px] px-4 md:px-8">
+          <Link
+            to="/projects"
+            className="inline-flex items-center gap-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]"
+          >
+            <ArrowLeft size={16} /> All projects
+          </Link>
+          <p className="mt-8 text-[var(--color-muted)]">Project not found.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pt-24 pb-20 min-h-screen">
       <div className="mx-auto max-w-[900px] px-4 md:px-8">
+        <Link
+          to="/projects"
+          className="inline-flex items-center gap-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] mb-6"
+        >
+          <ArrowLeft size={16} /> All projects
+        </Link>
+
         <RevealSection>
-          <p className="text-[var(--color-muted)] text-sm">Vault Finance · Active</p>
-          <h1 className="text-display text-3xl md:text-4xl font-medium mt-2">
-            Fintech Dashboard Redesign
-          </h1>
+          <p className="text-[var(--color-muted)] text-sm capitalize">
+            {project.status} · {project.projectType === "Fixed" ? "Fixed budget" : "Hourly"}
+          </p>
+          <h1 className="text-display text-3xl md:text-4xl font-medium mt-2">{project.title}</h1>
         </RevealSection>
 
         <article className="mt-12 prose-custom">
           <RevealSection delay={0.1}>
             <h2 className="text-lg font-medium mb-4">Overview</h2>
-            <p className="text-[var(--color-muted)] leading-[1.8] text-[17px]">
-              We're rebuilding our core banking dashboard for 40k daily active users.
-              The goal is clarity — reduce cognitive load on transaction flows while
-              maintaining the premium feel our brand demands. Think Stripe meets
-              private banking.
-            </p>
+            <p className="text-[var(--color-muted)] leading-[1.8] text-[17px]">{project.description}</p>
           </RevealSection>
 
           <RevealSection delay={0.15} className="mt-12">
-            <h2 className="text-lg font-medium mb-4">Scope</h2>
+            <h2 className="text-lg font-medium mb-4">Details</h2>
             <ul className="space-y-3 text-[var(--color-muted)] text-[17px] leading-relaxed">
-              <li className="flex gap-3"><span className="text-[var(--color-warm)]">→</span> 12 core screens (dashboard, transfers, analytics)</li>
-              <li className="flex gap-3"><span className="text-[var(--color-warm)]">→</span> Design system tokens & component library</li>
-              <li className="flex gap-3"><span className="text-[var(--color-warm)]">→</span> Interactive Figma prototype with dev handoff</li>
+              <li className="flex gap-3">
+                <span className="text-[var(--color-warm)]">→</span>
+                Budget: {formatBudget(project)}
+              </li>
+              <li className="flex gap-3">
+                <span className="text-[var(--color-warm)]">→</span>
+                Deadline: {formatDeadline(project.deadline)}
+              </li>
+              <li className="flex gap-3">
+                <span className="text-[var(--color-warm)]">→</span>
+                {project.proposalsCount} proposal{project.proposalsCount === 1 ? "" : "s"} received
+              </li>
             </ul>
           </RevealSection>
 
-          <RevealSection delay={0.2} className="mt-16">
-            <h2 className="text-lg font-medium mb-8">Milestones</h2>
-            <div className="relative">
-              {milestones.map((m, i) => (
-                <div key={m.id} className="flex gap-6 pb-12 last:pb-0">
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={`h-3 w-3 rounded-full shrink-0 ${
-                        m.status === "done"
-                          ? "bg-[var(--color-mint)]"
-                          : m.status === "active"
-                          ? "bg-[var(--color-warm)] ring-4 ring-[var(--color-warm)]/20"
-                          : "bg-white/10"
-                      }`}
-                    />
-                    {i < milestones.length - 1 && (
-                      <div className="w-px flex-1 bg-[var(--color-border)] mt-2 min-h-[60px]" />
-                    )}
-                  </div>
-                  <div className="flex-1 -mt-1">
-                    <div className="flex flex-wrap items-baseline gap-3">
-                      <h3 className="font-medium">{m.title}</h3>
-                      <span className="text-[11px] text-[var(--color-muted)]">{m.date}</span>
-                      {m.status === "active" && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-warm)]/15 text-[var(--color-warm)]">In progress</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-[var(--color-muted)] mt-1">{m.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </RevealSection>
+          {project.requiredSkills.length > 0 && (
+            <RevealSection delay={0.2} className="mt-12">
+              <h2 className="text-lg font-medium mb-4">Required skills</h2>
+              <div className="flex flex-wrap gap-2">
+                {project.requiredSkills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="text-sm px-3 py-1 rounded-full bg-white/5 text-[var(--color-muted)]"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </RevealSection>
+          )}
 
           <RevealSection delay={0.25} className="mt-16">
             <h2 className="text-lg font-medium mb-6">Discussion</h2>
-            <div className="space-y-4">
-              {[
-                { author: "Alex (Vault)", text: "Love the direction on the transfer flow. Can we explore a denser data table variant?", time: "Yesterday" },
-                { author: "Maya Chen", text: "Absolutely — I'll add a compact view toggle in the next iteration.", time: "5h ago" },
-              ].map((c) => (
-                <div key={c.time} className="glass rounded-xl p-4">
-                  <p className="text-sm font-medium">{c.author}</p>
-                  <p className="text-[var(--color-muted)] mt-2 text-sm leading-relaxed">{c.text}</p>
-                  <p className="text-[11px] text-[var(--color-muted)] mt-2">{c.time}</p>
+            <div className="space-y-4 min-h-[80px]">
+              {comments.length === 0 ? (
+                <div className="glass rounded-xl p-6 text-sm text-[var(--color-muted)]">
+                  No comments yet. Start the conversation with your freelancer.
                 </div>
-              ))}
+              ) : (
+                comments.map((c) => (
+                  <div key={c.id} className="glass rounded-xl p-4">
+                    <p className="text-sm font-medium">{c.author}</p>
+                    <p className="text-[var(--color-muted)] mt-2 text-sm leading-relaxed whitespace-pre-wrap">
+                      {c.text}
+                    </p>
+                    <p className="text-[11px] text-[var(--color-muted)] mt-2">
+                      {formatCommentTime(c.createdAt)}
+                    </p>
+                  </div>
+                ))
+              )}
+              <div ref={commentsEndRef} />
             </div>
-            <div className="mt-4 flex gap-2">
+            <form
+              className="mt-4 flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitComment();
+              }}
+            >
               <input
+                value={commentInput}
+                onChange={(e) => setCommentInput(e.target.value)}
                 placeholder="Add a comment..."
-                className="flex-1 bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm focus:outline-none"
+                className="flex-1 bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-warm)]/40 text-white placeholder:text-white/30"
               />
-              <button className="px-4 rounded-xl bg-white/5 border border-[var(--color-border)]">
-                <MessageCircle size={18} />
+              <button
+                type="submit"
+                disabled={!commentInput.trim()}
+                className="px-4 rounded-xl bg-[var(--color-warm)] text-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+                aria-label="Post comment"
+              >
+                <Send size={18} />
               </button>
-            </div>
+            </form>
+            {!user.isRegistered && (
+              <p className="text-[11px] text-[var(--color-muted)] mt-2">
+                Comments are saved to this project.{" "}
+                <Link to="/dashboard" className="text-[var(--color-warm)] hover:underline">
+                  Sign in from the dashboard
+                </Link>{" "}
+                to use your name.
+              </p>
+            )}
           </RevealSection>
         </article>
       </div>
@@ -103,7 +200,9 @@ export function ProjectDetail() {
         className="fixed bottom-6 right-6 md:bottom-8 md:right-8 flex items-center gap-2 px-5 py-3 rounded-full glass-strong shadow-2xl hover:border-[var(--color-warm)]/30 transition-colors z-30"
       >
         <FileText size={18} />
-        <span className="text-sm font-medium">Proposals (3)</span>
+        <span className="text-sm font-medium">
+          Proposals ({project.proposalsCount})
+        </span>
       </button>
 
       <AnimatePresence>
@@ -125,25 +224,64 @@ export function ProjectDetail() {
             >
               <div className="p-6 border-b border-[var(--color-border)] flex justify-between items-center">
                 <h3 className="font-medium">Proposals</h3>
-                <button onClick={() => setDrawerOpen(false)}><X size={20} /></button>
+                <button onClick={() => setDrawerOpen(false)}>
+                  <X size={20} />
+                </button>
               </div>
               <div className="p-6 space-y-4">
-                {[
-                  { name: "Maya Chen", score: 94, rate: "$95/hr", timeline: "6 weeks" },
-                  { name: "James Okafor", score: 78, rate: "$120/hr", timeline: "5 weeks" },
-                  { name: "Elena Voss", score: 72, rate: "$140/hr", timeline: "8 weeks" },
-                ].map((p) => (
-                  <div key={p.name} className="glass rounded-xl p-5 cursor-pointer hover:border-[var(--color-warm)]/20 transition-colors">
-                    <div className="flex justify-between">
-                      <span className="font-medium">{p.name}</span>
-                      <span className="text-[var(--color-mint)] text-sm font-bold">{p.score}</span>
-                    </div>
-                    <p className="text-sm text-[var(--color-muted)] mt-1">{p.rate} · {p.timeline}</p>
-                    <div className="mt-3 h-1 rounded-full bg-white/5">
-                      <div className="h-full rounded-full bg-gradient-to-r from-[var(--color-warm)] to-[var(--color-mint)]" style={{ width: `${p.score}%` }} />
-                    </div>
-                  </div>
-                ))}
+                {proposals.length === 0 ? (
+                  <p className="text-sm text-[var(--color-muted)]">
+                    No proposals yet. Matches from your dashboard will appear here as freelancers apply.
+                  </p>
+                ) : (
+                  proposals.map((proposal) => {
+                    const freelancer = getTalentById(proposal.freelancerId);
+                    const liveScore = freelancer
+                      ? computeMatch(project, freelancer).matchScore
+                      : proposal.matchScore;
+                    return (
+                      <div
+                        key={proposal.id}
+                        className="glass rounded-xl p-5 border border-white/5 hover:border-[var(--color-warm)]/20 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className="h-10 w-10 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+                              style={{
+                                background: `${freelancer?.color ?? "#6ee7b7"}22`,
+                                color: freelancer?.color ?? "#6ee7b7",
+                              }}
+                            >
+                              {freelancer?.avatar ?? "?"}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">
+                                {freelancer?.name ?? "Freelancer"}
+                              </p>
+                              <p className="text-[11px] text-[var(--color-muted)] truncate">
+                                {freelancer?.headline ?? "Applicant"}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-sm font-bold text-[var(--color-mint)] shrink-0">
+                            {liveScore}%
+                          </span>
+                        </div>
+                        <p className="text-sm text-[var(--color-muted)] mt-3 leading-relaxed">
+                          {proposal.coverMessage}
+                        </p>
+                        <Link
+                          to={`/ai/proposal-evaluator?freelancerId=${proposal.freelancerId}&projectId=${project.id}`}
+                          onClick={() => setDrawerOpen(false)}
+                          className="inline-block mt-3 text-xs text-[var(--color-warm)] hover:underline"
+                        >
+                          Evaluate proposal →
+                        </Link>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </motion.div>
           </>
