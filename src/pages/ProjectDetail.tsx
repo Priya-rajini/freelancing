@@ -1,12 +1,46 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useProjects } from "../context/ProjectContext";
+import {
+  useProjects,
+  type ProposalAttachment,
+  type ProposalStatus,
+} from "../context/ProjectContext";
 import { useTalent } from "../context/TalentContext";
 import { useUser } from "../context/UserContext";
 import { computeMatch } from "../utils/matching";
 import { RevealSection } from "../components/ui/RevealSection";
-import { ArrowLeft, X, FileText, Send } from "lucide-react";
+import { ProposalAttachmentPicker } from "../components/ui/ProposalAttachmentPicker";
+import { ProposalAttachmentList } from "../components/ui/ProposalAttachmentList";
+import { ArrowLeft, X, FileText, Send, CheckCircle2, XCircle, Clock } from "lucide-react";
+
+function proposalStatusLabel(status: ProposalStatus) {
+  if (status === "approved") return "Approved";
+  if (status === "denied") return "Denied";
+  return "Pending review";
+}
+
+function ProposalStatusBadge({ status }: { status: ProposalStatus }) {
+  if (status === "approved") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-mint)]/10 text-[var(--color-mint)] border border-[var(--color-mint)]/20">
+        <CheckCircle2 size={10} /> Approved
+      </span>
+    );
+  }
+  if (status === "denied") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
+        <XCircle size={10} /> Denied
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-[var(--color-muted)] border border-white/10">
+      <Clock size={10} /> Pending
+    </span>
+  );
+}
 
 function formatBudget(project: { projectType: string; budget: number }) {
   return project.projectType === "Fixed"
@@ -43,17 +77,48 @@ function formatCommentTime(iso: string) {
 
 export function ProjectDetail() {
   const { id } = useParams();
-  const { projects, addComment } = useProjects();
-  const { getTalentById } = useTalent();
+  const { projects, addComment, submitProposal } = useProjects();
+  const { getTalentById, myTalentId } = useTalent();
   const { user } = useUser();
   const project = projects.find((p) => p.id === id);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [commentInput, setCommentInput] = useState("");
+  const [proposalMessage, setProposalMessage] = useState("");
+  const [proposalImage, setProposalImage] = useState<ProposalAttachment | null>(null);
+  const [proposalResume, setProposalResume] = useState<ProposalAttachment | null>(null);
+  const [proposalError, setProposalError] = useState("");
+  const [proposalSuccess, setProposalSuccess] = useState(false);
   const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  const isClient =
+    user.role === "client" || (user.role === "both" && user.activeRoleView === "client");
+  const isFreelancer =
+    user.role === "freelancer" || (user.role === "both" && user.activeRoleView === "freelancer");
 
   const comments = project?.comments ?? [];
   const proposals = project?.proposals ?? [];
+  const myProposal = useMemo(
+    () => (myTalentId ? proposals.find((p) => p.freelancerId === myTalentId) : undefined),
+    [proposals, myTalentId]
+  );
   const authorName = user.isRegistered && user.name.trim() ? user.name.trim() : "You";
+
+  const handleSubmitProposal = () => {
+    if (!project || !myTalentId) return;
+    setProposalError("");
+    const attachments = [proposalImage, proposalResume].filter(
+      (a): a is ProposalAttachment => a !== null
+    );
+    const err = submitProposal(project.id, myTalentId, proposalMessage, attachments);
+    if (err) {
+      setProposalError(err);
+      return;
+    }
+    setProposalMessage("");
+    setProposalImage(null);
+    setProposalResume(null);
+    setProposalSuccess(true);
+  };
 
   useEffect(() => {
     commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -138,6 +203,79 @@ export function ProjectDetail() {
             </RevealSection>
           )}
 
+          {isFreelancer && project.status === "Open" && (
+            <RevealSection delay={0.22} className="mt-12">
+              <h2 className="text-lg font-medium mb-4">Submit a proposal</h2>
+              {!user.isRegistered ? (
+                <div className="glass rounded-xl p-6 text-sm text-[var(--color-muted)]">
+                  <Link to="/dashboard" className="text-[var(--color-warm)] hover:underline">
+                    Sign in
+                  </Link>{" "}
+                  as a freelancer to apply for this project.
+                </div>
+              ) : !myTalentId ? (
+                <div className="glass rounded-xl p-6 text-sm text-[var(--color-muted)]">
+                  Complete your freelancer profile (add at least one skill on the dashboard) before
+                  applying.
+                </div>
+              ) : myProposal ? (
+                <div className="glass rounded-xl p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium">Your proposal</p>
+                    <ProposalStatusBadge status={myProposal.status} />
+                  </div>
+                  <p className="text-sm text-[var(--color-muted)] mt-3 leading-relaxed whitespace-pre-wrap">
+                    {myProposal.coverMessage}
+                  </p>
+                  <ProposalAttachmentList attachments={myProposal.attachments} compact />
+                  <p className="text-[11px] text-[var(--color-muted)] mt-3">
+                    {proposalStatusLabel(myProposal.status)} · Match score {myProposal.matchScore}%
+                  </p>
+                </div>
+              ) : (
+                <div className="glass rounded-xl p-6">
+                  <p className="text-sm text-[var(--color-muted)] mb-4">
+                    Tell the client why you are a good fit. Your proposal will appear in their
+                    dashboard with AI match metrics.
+                  </p>
+                  <textarea
+                    value={proposalMessage}
+                    onChange={(e) => {
+                      setProposalMessage(e.target.value);
+                      setProposalError("");
+                      setProposalSuccess(false);
+                    }}
+                    rows={5}
+                    placeholder="Describe your approach, relevant experience, and timeline..."
+                    className="w-full bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-warm)]/40 text-white placeholder:text-white/30 resize-y min-h-[120px]"
+                  />
+                  <ProposalAttachmentPicker
+                    image={proposalImage}
+                    resume={proposalResume}
+                    onImageChange={setProposalImage}
+                    onResumeChange={setProposalResume}
+                  />
+                  {proposalError && (
+                    <p className="text-xs text-red-400 mt-2">{proposalError}</p>
+                  )}
+                  {proposalSuccess && (
+                    <p className="text-xs text-[var(--color-mint)] mt-2">
+                      Proposal sent. The client can review and evaluate it from their dashboard.
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSubmitProposal}
+                    disabled={!proposalMessage.trim()}
+                    className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-[#0a0a0b] bg-[var(--color-warm)] disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+                  >
+                    <Send size={16} /> Send proposal
+                  </button>
+                </div>
+              )}
+            </RevealSection>
+          )}
+
           <RevealSection delay={0.25} className="mt-16">
             <h2 className="text-lg font-medium mb-6">Discussion</h2>
             <div className="space-y-4 min-h-[80px]">
@@ -195,18 +333,20 @@ export function ProjectDetail() {
         </article>
       </div>
 
-      <button
-        onClick={() => setDrawerOpen(true)}
-        className="fixed bottom-6 right-6 md:bottom-8 md:right-8 flex items-center gap-2 px-5 py-3 rounded-full glass-strong shadow-2xl hover:border-[var(--color-warm)]/30 transition-colors z-30"
-      >
-        <FileText size={18} />
-        <span className="text-sm font-medium">
-          Proposals ({project.proposalsCount})
-        </span>
-      </button>
+      {isClient && (
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className="fixed bottom-6 right-6 md:bottom-8 md:right-8 flex items-center gap-2 px-5 py-3 rounded-full glass-strong shadow-2xl hover:border-[var(--color-warm)]/30 transition-colors z-30"
+        >
+          <FileText size={18} />
+          <span className="text-sm font-medium">
+            Proposals ({project.proposalsCount})
+          </span>
+        </button>
+      )}
 
       <AnimatePresence>
-        {drawerOpen && (
+        {isClient && drawerOpen && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
@@ -231,7 +371,7 @@ export function ProjectDetail() {
               <div className="p-6 space-y-4">
                 {proposals.length === 0 ? (
                   <p className="text-sm text-[var(--color-muted)]">
-                    No proposals yet. Matches from your dashboard will appear here as freelancers apply.
+                    No proposals yet. When freelancers apply, their proposals will appear here.
                   </p>
                 ) : (
                   proposals.map((proposal) => {
@@ -264,19 +404,26 @@ export function ProjectDetail() {
                               </p>
                             </div>
                           </div>
-                          <span className="text-sm font-bold text-[var(--color-mint)] shrink-0">
-                            {liveScore}%
-                          </span>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <span className="text-sm font-bold text-[var(--color-mint)]">
+                              {liveScore}%
+                            </span>
+                            <ProposalStatusBadge status={proposal.status} />
+                          </div>
                         </div>
                         <p className="text-sm text-[var(--color-muted)] mt-3 leading-relaxed">
                           {proposal.coverMessage}
                         </p>
+                        <ProposalAttachmentList
+                          attachments={proposal.attachments}
+                          compact
+                        />
                         <Link
                           to={`/ai/proposal-evaluator?freelancerId=${proposal.freelancerId}&projectId=${project.id}`}
                           onClick={() => setDrawerOpen(false)}
                           className="inline-block mt-3 text-xs text-[var(--color-warm)] hover:underline"
                         >
-                          Evaluate proposal →
+                          Review & evaluate →
                         </Link>
                       </div>
                     );

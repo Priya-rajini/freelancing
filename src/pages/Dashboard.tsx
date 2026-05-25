@@ -1,12 +1,16 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, type UserRole } from "../context/UserContext";
 import { CompletenessWidget } from "../components/ui/CompletenessWidget";
 import { TaskChecklist } from "../components/ui/TaskChecklist";
-import { projects } from "../data/mockData";
 import { useProjects } from "../context/ProjectContext";
 import { useTalent } from "../context/TalentContext";
 import { computeMatches } from "../utils/matching";
+import {
+  getAssistantResponse,
+  getWelcomeMessage,
+  type WorkspaceAssistantContext,
+} from "../utils/workspaceAssistant";
 import {
   LayoutGrid,
   FolderKanban,
@@ -15,7 +19,6 @@ import {
   Send,
   Sparkles,
   ChevronRight,
-  Clock,
   Briefcase,
   Users,
   Globe,
@@ -47,7 +50,7 @@ const colorPalettes = [
 ];
 
 export function Dashboard() {
-  const { user, signup, login, logout, setRole, setActiveRoleView } = useUser();
+  const { user, signup, login, logout, setRole, setActiveRoleView, completeness } = useUser();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [authMode, setAuthMode] = useState<"signup" | "login">(
@@ -83,12 +86,28 @@ export function Dashboard() {
     if (!selectedProject) return [];
     return computeMatches(talentPool, selectedProject, myTalentId ?? undefined).slice(0, 5);
   }, [selectedProject, talentPool, myTalentId]);
-  const [messages, setMessages] = useState(() => [
-    {
-      role: "ai",
-      text: "Welcome to SkillSync! I'm your AI Workspace Assistant. Let's finish your profile setup to unlock AI Smart Matching and verify your credentials.",
-    },
-  ]);
+
+  const receivedProposals = useMemo(() => {
+    if (!selectedProject) return [];
+    return (selectedProject.proposals ?? []).filter((p) => p.status !== "denied");
+  }, [selectedProject]);
+
+  const myApplications = useMemo(() => {
+    if (!myTalentId) return [];
+    return clientProjects
+      .flatMap((p) =>
+        (p.proposals ?? [])
+          .filter((prop) => prop.freelancerId === myTalentId)
+          .map((prop) => ({ project: p, proposal: prop }))
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.proposal.submittedAt).getTime() - new Date(a.proposal.submittedAt).getTime()
+      );
+  }, [clientProjects, myTalentId]);
+  const [messages, setMessages] = useState<{ role: "ai" | "user"; text: string }[]>([]);
+  const [aiTyping, setAiTyping] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Signup fields
   const [signupName, setSignupName] = useState("");
@@ -101,17 +120,61 @@ export function Dashboard() {
   const [loginPassword, setLoginPassword] = useState("");
   const [authError, setAuthError] = useState("");
 
+  const isFreelancerViewForCtx =
+    user.role === "freelancer" || (user.role === "both" && user.activeRoleView === "freelancer");
+
+  const assistantContext = useMemo((): WorkspaceAssistantContext => {
+    const roleView: "client" | "freelancer" = isFreelancerViewForCtx ? "freelancer" : "client";
+    const received = selectedProject?.proposals ?? [];
+    return {
+      user,
+      roleView,
+      completenessScore: completeness.score,
+      completenessChecklist: completeness.checklist,
+      projects: clientProjects,
+      myTalentId,
+      myApplications,
+      receivedProposals: received,
+      pendingProposalsCount: received.filter((p) => p.status === "pending").length,
+      talentPoolSize: talentPool.length,
+      talentPool,
+    };
+  }, [
+    user,
+    isFreelancerViewForCtx,
+    completeness,
+    clientProjects,
+    myTalentId,
+    myApplications,
+    selectedProject,
+    talentPool,
+  ]);
+
+  useEffect(() => {
+    if (!user.isRegistered || !user.role) return;
+    setMessages((prev) => {
+      if (prev.length > 0) return prev;
+      return [{ role: "ai", text: getWelcomeMessage(assistantContext) }];
+    });
+  }, [user.isRegistered, user.role, assistantContext]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, aiTyping]);
+
   const sendAi = () => {
-    if (!aiInput.trim()) return;
-    setMessages((m) => [
-      ...m,
-      { role: "user", text: aiInput },
-      {
-        role: "ai",
-        text: `Analyzing your workspace metrics and profile data... How else can I assist with your matching status?`,
-      },
-    ]);
+    const text = aiInput.trim();
+    if (!text || aiTyping) return;
+
+    setMessages((m) => [...m, { role: "user", text }]);
     setAiInput("");
+    setAiTyping(true);
+
+    window.setTimeout(() => {
+      const reply = getAssistantResponse(text, assistantContext);
+      setMessages((m) => [...m, { role: "ai", text: reply }]);
+      setAiTyping(false);
+    }, 400);
   };
 
   const handleRegister = (e: React.FormEvent) => {
@@ -554,7 +617,7 @@ export function Dashboard() {
   const isFreelancerView = user.activeRoleView === "freelancer";
 
   return (
-    <div className="pt-20 min-h-screen flex flex-col lg:flex-row bg-[var(--color-void)]">
+    <div className="pt-20 min-h-screen flex flex-col lg:flex-row bg-[var(--color-void)] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
       {/* Sidebar Nav */}
       <aside className="hidden lg:flex w-[220px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]/30 min-h-[calc(100vh-5rem)] p-4">
         <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] px-3 mb-4 font-mono">
@@ -658,7 +721,12 @@ export function Dashboard() {
           <p className="text-[var(--color-muted)] mt-1.5 text-sm flex items-center gap-2">
             {isFreelancerView ? (
               <>
-                <span>3 active projects · 2 messages waiting</span>
+                <span>
+                  {myApplications.length} proposal{myApplications.length === 1 ? "" : "s"} sent
+                  {myApplications.some((a) => a.proposal.status === "pending")
+                    ? " · pending client review"
+                    : ""}
+                </span>
                 {user.verification.status === "verified" && (
                   <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-mint)] font-mono">
                     <ShieldCheck size={11} /> AI VERIFIED TALENT
@@ -689,50 +757,50 @@ export function Dashboard() {
               >
                 <div className="space-y-4">
                   <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
-                    Current work
+                    My proposals
                   </p>
-                  {projects.map((p, i) => (
-                    <Link
-                      key={p.id}
-                      to={`/projects/${p.id}`}
-                      className="block glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all group relative overflow-hidden"
-                      style={{ transform: `translateX(${i * 4}px)` }}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-medium group-hover:text-[var(--color-warm)] transition-colors" style={{ "--hover-color": user.color } as React.CSSProperties}>
-                            {p.title}
-                          </h3>
-                          <p className="text-sm text-[var(--color-muted)] mt-0.5">{p.client}</p>
-                        </div>
-                        <span className="text-[11px] px-2 py-1 rounded-full bg-white/5 text-[var(--color-muted)]">
-                          {p.status}
-                        </span>
-                      </div>
-                      <div className="mt-4 h-1.5 rounded-full bg-white/5 overflow-hidden">
-                        <motion.div
-                          className="h-full bg-gradient-to-r"
-                          style={{
-                            backgroundImage: `linear-gradient(90deg, ${user.color}, var(--color-mint))`,
-                          }}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${p.progress}%` }}
-                          transition={{ duration: 1, delay: i * 0.1 }}
-                        />
-                      </div>
-                      <div className="flex justify-between mt-3 text-[11px] text-[var(--color-muted)]">
-                        <span className="flex items-center gap-1">
-                          <Clock size={10} /> Due {p.due}
-                        </span>
-                        <span>{p.budget}</span>
-                        <ChevronRight
-                          size={14}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--color-warm)]"
-                          style={{ color: user.color }}
-                        />
-                      </div>
-                    </Link>
-                  ))}
+                  {myApplications.length === 0 ? (
+                    <div className="glass rounded-xl p-8 text-center border border-white/5 bg-white/[0.005]">
+                      <p className="text-sm text-[var(--color-muted)]">
+                        No proposals sent yet. Browse open projects and submit a proposal to get hired.
+                      </p>
+                      <Link
+                        to="/projects"
+                        className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-xl text-xs font-semibold text-black hover:opacity-90 transition-opacity"
+                        style={{ backgroundColor: user.color }}
+                      >
+                        Browse projects
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {myApplications.map(({ project: proj, proposal }) => (
+                        <Link
+                          key={proposal.id}
+                          to={`/projects/${proj.id}`}
+                          className="block glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all border border-white/5"
+                        >
+                          <div className="flex justify-between items-start gap-3">
+                            <h3 className="font-medium text-sm text-white line-clamp-1">{proj.title}</h3>
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full shrink-0 capitalize ${
+                                proposal.status === "approved"
+                                  ? "bg-[var(--color-mint)]/10 text-[var(--color-mint)]"
+                                  : proposal.status === "denied"
+                                    ? "bg-red-500/10 text-red-400"
+                                    : "bg-white/5 text-[var(--color-muted)]"
+                              }`}
+                            >
+                              {proposal.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[var(--color-muted)] mt-2 line-clamp-2">
+                            {proposal.coverMessage}
+                          </p>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <TaskChecklist roleView="freelancer" title="Today's focus" />
@@ -824,16 +892,16 @@ export function Dashboard() {
                   )}
                 </div>
 
-                {/* Candidate Matches */}
+                {/* Received Proposals */}
                 <div className="glass rounded-xl p-6 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-medium text-sm">Best-Fit Candidate Matches (SkillSync Matcher)</h3>
+                    <h3 className="font-medium text-sm">Received Proposals</h3>
                     <Sparkles size={16} className="text-[var(--color-warm)]" style={{ color: user.color }} />
                   </div>
                   <div className="space-y-3">
                     {!selectedProject ? (
                       <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)] flex flex-col items-center gap-3">
-                        <span>Post a project to see matches</span>
+                        <span>Select a project to review applications</span>
                         <Link
                           to="/post-project"
                           className="px-4 py-2 rounded-xl text-xs font-semibold text-black hover:opacity-90 transition-opacity"
@@ -842,65 +910,86 @@ export function Dashboard() {
                           Post a Job
                         </Link>
                       </div>
-                    ) : talentPool.length === 0 ? (
+                    ) : receivedProposals.length === 0 ? (
                       <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)]">
-                        No freelancers on SkillSync yet. When freelancers complete their profiles, matches appear here in real time.
-                      </div>
-                    ) : matches.length === 0 ? (
-                      <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)]">
-                        No strong matches for this project yet. Add or adjust required skills on your posting.
+                        No proposals yet. Freelancers can apply from the Projects page once your job is open.
                       </div>
                     ) : (
-                      matches.map((candidate) => (
-                        <div
-                          key={candidate.id}
-                          className="p-3.5 rounded-lg border border-white/5 hover:border-white/10 bg-white/[0.005] flex items-center justify-between transition-all"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold font-mono"
-                              style={{ background: `${candidate.color}22`, color: candidate.color }}
-                            >
-                              {candidate.avatar || candidate.name.split(" ").map((n: string) => n[0]).join("")}
-                            </div>
-                            <div>
-                              <div className="text-xs font-semibold text-white">{candidate.name}</div>
-                              <div className="text-[10px] text-[var(--color-muted)] mt-0.5">
-                                {candidate.headline} · {candidate.skills.slice(0, 3).join(", ")}{candidate.skills.length > 3 && "..."}
+                      receivedProposals.map((prop) => {
+                        const applicant = talentPool.find((t) => t.id === prop.freelancerId);
+                        return (
+                          <div
+                            key={prop.id}
+                            className="p-3.5 rounded-lg border border-white/5 hover:border-white/10 bg-white/[0.005] transition-all"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div
+                                  className="h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold font-mono shrink-0"
+                                  style={{
+                                    background: `${applicant?.color ?? "#6ee7b7"}22`,
+                                    color: applicant?.color ?? "#6ee7b7",
+                                  }}
+                                >
+                                  {applicant?.avatar ??
+                                    applicant?.name
+                                      ?.split(" ")
+                                      .map((n: string) => n[0])
+                                      .join("") ??
+                                    "?"}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-semibold text-white truncate">
+                                    {applicant?.name ?? "Freelancer"}
+                                  </div>
+                                  <div className="text-[10px] text-[var(--color-muted)] mt-0.5 capitalize">
+                                    {prop.status} · AI match {prop.matchScore}%
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-
-                          <div className="text-right flex flex-col items-end">
-                            {candidate.matchScore < 40 ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-950/20 text-red-400 text-[10px] font-mono border border-red-900/30">
-                                Low match (below 40%)
-                              </span>
-                            ) : (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border"
-                                style={{
-                                  backgroundColor: `${user.color}10`,
-                                  borderColor: `${user.color}25`,
-                                  color: user.color
-                                }}
+                              <Link
+                                to={`/ai/proposal-evaluator?freelancerId=${prop.freelancerId}&projectId=${selectedProject.id}`}
+                                className="text-[10px] shrink-0 hover:underline"
+                                style={{ color: user.color }}
                               >
-                                AI Match: {candidate.matchScore}%
-                              </span>
+                                Review & evaluate
+                              </Link>
+                            </div>
+                            <p className="text-[10px] text-[var(--color-muted)] mt-2 line-clamp-2">
+                              {prop.coverMessage}
+                            </p>
+                            {(prop.attachments?.length ?? 0) > 0 && (
+                              <p className="text-[10px] text-[var(--color-warm)] mt-1">
+                                {(prop.attachments?.length ?? 0)} attachment
+                                {(prop.attachments?.length ?? 0) === 1 ? "" : "s"} included
+                              </p>
                             )}
-                            <Link
-                              to={`/ai/proposal-evaluator?freelancerId=${candidate.id}&projectId=${selectedProject.id}`}
-                              className="text-[10px] mt-1.5 hover:underline cursor-pointer text-[var(--color-warm)]"
-                              style={{ color: user.color }}
-                            >
-                              Evaluate Proposal
-                            </Link>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
+
+                {/* Talent pool preview (optional matches not yet applied) */}
+                {selectedProject && matches.length > 0 && receivedProposals.length === 0 && (
+                  <div className="glass rounded-xl p-6 space-y-4 opacity-80">
+                    <h3 className="font-medium text-sm text-[var(--color-muted)]">
+                      Suggested talent (not yet applied)
+                    </h3>
+                    <div className="space-y-2">
+                      {matches.slice(0, 3).map((candidate) => (
+                        <div
+                          key={candidate.id}
+                          className="text-[10px] text-[var(--color-muted)] flex justify-between"
+                        >
+                          <span>{candidate.name}</span>
+                          <span>{candidate.matchScore}% fit</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Checklist Client */}
                 <TaskChecklist roleView="client" title="Today's Hiring Checklist" />
@@ -911,25 +1000,25 @@ export function Dashboard() {
       </div>
 
       {/* Right Sidebar Section */}
-      <aside className="w-full lg:w-[360px] shrink-0 border-t lg:border-t-0 lg:border-l border-[var(--color-border)] bg-[var(--color-surface)]/50 flex flex-col p-6 space-y-6">
+      <aside className="w-full lg:w-[360px] shrink-0 border-t lg:border-t-0 lg:border-l border-[var(--color-border)] bg-[var(--color-surface)]/50 flex flex-col p-6 space-y-6 lg:min-h-0 lg:overflow-y-auto">
         {/* Nudge Widget */}
         <CompletenessWidget />
 
         {/* AI assistant sidebar widgets */}
-        <div className="glass rounded-2xl flex flex-col flex-1 min-h-[300px]">
-          <div className="p-4 border-b border-[var(--color-border)] flex items-center gap-2">
+        <div className="glass rounded-2xl flex flex-col lg:flex-1 lg:min-h-[300px] overflow-hidden">
+          <div className="shrink-0 p-4 border-b border-[var(--color-border)] flex items-center gap-2">
             <Sparkles size={16} className="text-[var(--color-warm)] animate-pulse" style={{ color: user.color }} />
             <span className="text-sm font-semibold">AI Assistant</span>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[320px]">
+          <div className="overflow-y-auto p-4 space-y-4 min-h-[100px] max-h-[min(40vh,280px)] lg:max-h-none lg:flex-1 lg:min-h-0">
             <AnimatePresence>
               {messages.map((msg, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`text-xs p-3 rounded-xl max-w-[90%] leading-relaxed ${
+                  className={`text-xs p-3 rounded-xl max-w-[90%] leading-relaxed whitespace-pre-wrap ${
                     msg.role === "ai"
                       ? "bg-white/[0.03] text-[var(--color-muted)] mr-auto border border-white/5"
                       : "bg-[var(--color-warm)]/15 text-[var(--color-text)] ml-auto"
@@ -941,23 +1030,41 @@ export function Dashboard() {
                   {msg.text}
                 </motion.div>
               ))}
+              {aiTyping && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-xs p-3 rounded-xl bg-white/[0.03] text-[var(--color-muted)] mr-auto border border-white/5"
+                >
+                  Thinking…
+                </motion.div>
+              )}
             </AnimatePresence>
+            <div ref={chatEndRef} />
           </div>
 
-          <div className="p-4 border-t border-[var(--color-border)] mt-auto">
+          <div className="shrink-0 p-4 border-t border-[var(--color-border)] bg-[var(--color-surface)]/80">
             <div className="flex gap-2">
               <input
                 value={aiInput}
                 onChange={(e) => setAiInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendAi()}
-                placeholder="Ask assistant to update profile..."
-                className="flex-1 bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-2 text-xs focus:outline-none text-white placeholder-white/20"
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendAi()}
+                placeholder={
+                  isFreelancerView
+                    ? "Ask about profile, projects, proposals…"
+                    : "Ask about hiring, proposals, matching…"
+                }
+                disabled={aiTyping}
+                className="flex-1 bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-xs focus:outline-none text-white placeholder-white/20 min-h-[40px] disabled:opacity-50"
                 style={{ borderColor: "rgba(255,255,255,0.06)" }}
               />
               <button
+                type="button"
                 onClick={sendAi}
-                className="p-2.5 rounded-xl text-[#0a0a0b] hover:opacity-90 transition-opacity"
+                disabled={aiTyping || !aiInput.trim()}
+                className="p-2.5 rounded-xl text-[#0a0a0b] hover:opacity-90 transition-opacity shrink-0 disabled:opacity-40"
                 style={{ backgroundColor: user.color }}
+                aria-label="Send message"
               >
                 <Send size={14} />
               </button>
@@ -967,7 +1074,7 @@ export function Dashboard() {
       </aside>
 
       {/* Mobile nav bar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 glass-strong border-t border-[var(--color-border)] flex justify-around py-3 px-2 z-40">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 glass-strong border-t border-[var(--color-border)] flex justify-around py-3 px-2 z-40 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
         {navItems.slice(0, 4).map((item) => (
           <button key={item.label} className="flex flex-col items-center gap-1 text-[10px] text-[var(--color-muted)]">
             <item.icon size={20} />

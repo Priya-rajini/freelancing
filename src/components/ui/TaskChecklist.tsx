@@ -14,6 +14,30 @@ interface TaskChecklistProps {
   title: string;
 }
 
+/** Legacy demo task ids — stripped when loading saved checklists */
+const LEGACY_SAMPLE_TASK_IDS = new Set([
+  "f-1",
+  "f-2",
+  "f-3",
+  "c-1",
+  "c-2",
+  "c-3",
+]);
+
+function loadTasks(storageKey: string): TaskItem[] {
+  const saved = localStorage.getItem(storageKey);
+  if (!saved) return [];
+
+  try {
+    const parsed = JSON.parse(saved) as TaskItem[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((t) => t?.id && !LEGACY_SAMPLE_TASK_IDS.has(t.id));
+  } catch (e) {
+    console.error("Failed to parse saved tasks", e);
+    return [];
+  }
+}
+
 export function TaskChecklist({ roleView, title }: TaskChecklistProps) {
   const { user } = useUser();
   const storageKey = `skillsync_tasks_${roleView}`;
@@ -23,36 +47,10 @@ export function TaskChecklist({ roleView, title }: TaskChecklistProps) {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
 
-  // Load tasks on mount or when roleView changes
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      try {
-        setTasks(JSON.parse(saved));
-        return;
-      } catch (e) {
-        console.error("Failed to parse saved tasks", e);
-      }
-    }
-
-    // Default checklist items if none saved
-    const defaults: TaskItem[] =
-      roleView === "freelancer"
-        ? [
-            { id: "f-1", text: "Review Helix AI feedback", completed: true },
-            { id: "f-2", text: "Vault Finance — Visual design handoff", completed: false },
-            { id: "f-3", text: "Respond to Bloom Studio proposal", completed: false },
-          ]
-        : [
-            { id: "c-1", text: "Authorize escrow deposit for Vault Finance", completed: true },
-            { id: "c-2", text: "Review James Okafor's React coding test suitability", completed: false },
-            { id: "c-3", text: "Schedule introductory Zoom call with ML consultant Elena", completed: false },
-          ];
-
-    setTasks(defaults);
+    setTasks(loadTasks(storageKey));
   }, [roleView, storageKey]);
 
-  // Save tasks on changes
   useEffect(() => {
     if (tasks.length > 0) {
       localStorage.setItem(storageKey, JSON.stringify(tasks));
@@ -113,9 +111,11 @@ export function TaskChecklist({ roleView, title }: TaskChecklistProps) {
       {/* Title */}
       <div className="flex justify-between items-center pb-2 border-b border-white/5">
         <h3 className="font-semibold text-sm text-white capitalize">{title}</h3>
-        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-[var(--color-muted)]">
-          {tasks.filter((t) => t.completed).length}/{tasks.length} Completed
-        </span>
+        {tasks.length > 0 && (
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-[var(--color-muted)]">
+            {tasks.filter((t) => t.completed).length}/{tasks.length} completed
+          </span>
+        )}
       </div>
 
       {/* Add Task Input Form */}

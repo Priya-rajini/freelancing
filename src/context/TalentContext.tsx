@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useUser, type UserProfile } from "./UserContext";
-import { SAMPLE_FREELANCER } from "../data/sampleFreelancer";
 import type { TalentProfile } from "../utils/matching";
 import { parseExperienceYears } from "../utils/matching";
+import { LEGACY_SAMPLE_FREELANCER_ID } from "../utils/proposals";
 
 const POOL_KEY = "skillsync_talent_pool";
 const TALENT_ID_KEY = "skillsync_talent_id";
@@ -11,7 +11,9 @@ function loadPool(): TalentProfile[] {
   const saved = localStorage.getItem(POOL_KEY);
   if (!saved) return [];
   try {
-    return JSON.parse(saved) as TalentProfile[];
+    return (JSON.parse(saved) as TalentProfile[]).filter(
+      (t) => t.id !== LEGACY_SAMPLE_FREELANCER_ID
+    );
   } catch {
     return [];
   }
@@ -89,15 +91,6 @@ export function TalentProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     syncFromUser();
   }, [syncFromUser]);
-
-  useEffect(() => {
-    setTalentPool((prev) => {
-      if (prev.some((t) => t.id === SAMPLE_FREELANCER.id)) return prev;
-      const next = [{ ...SAMPLE_FREELANCER, updatedAt: Date.now() }, ...prev];
-      localStorage.setItem(POOL_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
