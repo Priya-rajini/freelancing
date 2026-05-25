@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useUser, type UserProfile } from "./UserContext";
+import { SAMPLE_FREELANCER } from "../data/sampleFreelancer";
 import type { TalentProfile } from "../utils/matching";
 import { parseExperienceYears } from "../utils/matching";
 
@@ -88,6 +89,15 @@ export function TalentProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     syncFromUser();
   }, [syncFromUser]);
+
+  useEffect(() => {
+    setTalentPool((prev) => {
+      if (prev.some((t) => t.id === SAMPLE_FREELANCER.id)) return prev;
+      const next = [{ ...SAMPLE_FREELANCER, updatedAt: Date.now() }, ...prev];
+      localStorage.setItem(POOL_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {

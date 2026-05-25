@@ -17,6 +17,7 @@ export interface PortfolioItem {
 }
 
 export interface UserProfile {
+  email: string;
   name: string;
   avatar: string;
   color: string;
@@ -39,9 +40,78 @@ export interface UserProfile {
   availability?: string;
 }
 
+interface StoredAccount {
+  email: string;
+  password: string;
+  profile: UserProfile;
+}
+
+const ACCOUNTS_KEY = "skillsync_accounts";
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function loadAccounts(): StoredAccount[] {
+  const saved = localStorage.getItem(ACCOUNTS_KEY);
+  if (!saved) return [];
+  try {
+    return JSON.parse(saved) as StoredAccount[];
+  } catch {
+    return [];
+  }
+}
+
+function saveAccounts(accounts: StoredAccount[]) {
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+}
+
+function makeInitialProfile(): UserProfile {
+  return {
+    email: "",
+    name: "",
+    avatar: "",
+    color: "#e8a87c",
+    role: null,
+    activeRoleView: "freelancer",
+    bio: "",
+    location: "",
+    skills: ["Figma"],
+    verified: [],
+    portfolioItems: [],
+    verification: {
+      status: "unverified",
+      method: null,
+      value: null,
+    },
+    isRegistered: false,
+    companyName: "",
+    hiringPreferences: "",
+    experienceYears: "",
+    availability: "",
+  };
+}
+
+function initialsFromName(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
 interface UserContextType {
   user: UserProfile;
-  signup: (name: string, location: string, color: string) => void;
+  signup: (
+    name: string,
+    location: string,
+    color: string,
+    email: string,
+    password: string
+  ) => string | null;
+  login: (email: string, password: string) => string | null;
   logout: () => void;
   setRole: (role: UserRole) => void;
   setActiveRoleView: (view: RoleView) => void;
@@ -73,84 +143,91 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const saved = localStorage.getItem("skillsync_user_profile");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved) as UserProfile;
+        return { ...makeInitialProfile(), ...parsed, email: parsed.email ?? "" };
       } catch (e) {
         console.error("Failed to parse saved user profile", e);
       }
     }
-    // Return empty profile by default so they must sign up
-    return {
-      name: "",
-      avatar: "",
-      color: "#e8a87c",
-      role: null,
-      activeRoleView: "freelancer",
-      bio: "",
-      location: "",
-      skills: ["Figma"], // Start with a default skill
-      verified: [],
-      portfolioItems: [],
-      verification: {
-        status: "unverified",
-        method: null,
-        value: null,
-      },
-      isRegistered: false, // Default is not registered
-      companyName: "",
-      hiringPreferences: "",
-      experienceYears: "",
-      availability: "",
-    };
+    return makeInitialProfile();
   });
 
   useEffect(() => {
-    localStorage.setItem("skillsync_user_profile", JSON.stringify(user));
+    if (user.isRegistered) {
+      localStorage.setItem("skillsync_user_profile", JSON.stringify(user));
+    }
   }, [user]);
 
-  const signup = (name: string, location: string, color: string) => {
-    // Generate initials for avatar
-    const initials = name
-      .trim()
-      .split(/\s+/)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+  useEffect(() => {
+    if (!user.isRegistered || !user.email) return;
+    const accounts = loadAccounts();
+    const email = normalizeEmail(user.email);
+    const idx = accounts.findIndex((a) => normalizeEmail(a.email) === email);
+    if (idx >= 0) {
+      accounts[idx] = { ...accounts[idx], profile: user };
+      saveAccounts(accounts);
+    }
+  }, [user]);
 
-    setUser((prev) => ({
-      ...prev,
+  const signup = (
+    name: string,
+    location: string,
+    color: string,
+    email: string,
+    password: string
+  ): string | null => {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return "Please enter a valid email address.";
+    }
+    if (password.length < 6) {
+      return "Password must be at least 6 characters.";
+    }
+    if (loadAccounts().some((a) => normalizeEmail(a.email) === normalizedEmail)) {
+      return "An account with this email already exists. Try logging in.";
+    }
+
+    const profile: UserProfile = {
+      ...makeInitialProfile(),
+      email: normalizedEmail,
       name,
       location,
       color,
-      avatar: initials || "U",
+      avatar: initialsFromName(name) || "U",
       isRegistered: true,
-      role: null, // Reset role so they pick role next
-    }));
+      role: null,
+    };
+
+    const accounts = loadAccounts();
+    accounts.push({ email: normalizedEmail, password, profile });
+    saveAccounts(accounts);
+    setUser(profile);
+    return null;
+  };
+
+  const login = (email: string, password: string): string | null => {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) {
+      return "Please enter your email.";
+    }
+    if (!password) {
+      return "Please enter your password.";
+    }
+
+    const account = loadAccounts().find((a) => normalizeEmail(a.email) === normalizedEmail);
+    if (!account) {
+      return "No account found with this email. Create an account first.";
+    }
+    if (account.password !== password) {
+      return "Incorrect password. Please try again.";
+    }
+
+    setUser({ ...account.profile, email: normalizedEmail, isRegistered: true });
+    return null;
   };
 
   const logout = () => {
-    setUser({
-      name: "",
-      avatar: "",
-      color: "#e8a87c",
-      role: null,
-      activeRoleView: "freelancer",
-      bio: "",
-      location: "",
-      skills: ["Figma"],
-      verified: [],
-      portfolioItems: [],
-      verification: {
-        status: "unverified",
-        method: null,
-        value: null,
-      },
-      isRegistered: false,
-      companyName: "",
-      hiringPreferences: "",
-      experienceYears: "",
-      availability: "",
-    });
+    setUser(makeInitialProfile());
     localStorage.removeItem("skillsync_user_profile");
   };
 
@@ -315,6 +392,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         signup,
+        login,
         logout,
         setRole,
         setActiveRoleView,
