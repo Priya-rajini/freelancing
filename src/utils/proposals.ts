@@ -1,7 +1,16 @@
-import type { Project, ProjectProposal } from "../context/ProjectContext";
-import { SAMPLE_FREELANCER, SAMPLE_FREELANCER_ID, SAMPLE_PROPOSAL_MESSAGE } from "../data/sampleFreelancer";
+import type { Project } from "../context/ProjectContext";
 import type { TalentProfile } from "./matching";
 import { computeMatch } from "./matching";
+
+/** Legacy demo freelancer id — stripped from stored data */
+export const LEGACY_SAMPLE_FREELANCER_ID = "talent-sample-alex-rivera";
+
+export function stripSampleProposals(project: Project): Project {
+  const proposals = (project.proposals ?? []).filter(
+    (p) => p.freelancerId !== LEGACY_SAMPLE_FREELANCER_ID
+  );
+  return { ...project, proposals, proposalsCount: proposals.length };
+}
 
 export function syncProjectProposalsWithTalent(
   projects: Project[],
@@ -21,24 +30,4 @@ export function syncProjectProposalsWithTalent(
     if (!changed) return project;
     return { ...project, proposals, proposalsCount: proposals.length };
   });
-}
-
-export function createSampleProposal(project: Project): ProjectProposal {
-  const match = computeMatch(project, SAMPLE_FREELANCER);
-  return {
-    id: `prop-${SAMPLE_FREELANCER_ID}-${project.id}`,
-    freelancerId: SAMPLE_FREELANCER_ID,
-    coverMessage: SAMPLE_PROPOSAL_MESSAGE,
-    matchScore: match.matchScore,
-    submittedAt: new Date().toISOString(),
-  };
-}
-
-export function withSampleProposalIfMissing(project: Project): Project {
-  const proposals = project.proposals ?? [];
-  if (proposals.some((p) => p.freelancerId === SAMPLE_FREELANCER_ID)) {
-    return { ...project, proposals, proposalsCount: proposals.length };
-  }
-  const next = [...proposals, createSampleProposal(project)];
-  return { ...project, proposals: next, proposalsCount: next.length };
 }

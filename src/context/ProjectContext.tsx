@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useTalent } from "./TalentContext";
-import { SAMPLE_FREELANCER_ID } from "../data/sampleFreelancer";
-import { syncProjectProposalsWithTalent, withSampleProposalIfMissing } from "../utils/proposals";
+import { stripSampleProposals, syncProjectProposalsWithTalent } from "../utils/proposals";
+import { computeMatch } from "../utils/matching";
+import { validateProposalAttachments } from "../utils/proposalAttachments";
 
 export type ProjectType = "Fixed" | "Hourly";
 export type ProjectStatus = "Open" | "Active" | "Completed";
@@ -13,12 +14,26 @@ export interface ProjectComment {
   createdAt: string;
 }
 
+export type ProposalStatus = "pending" | "approved" | "denied";
+export type ProposalAttachmentType = "image" | "resume";
+
+export interface ProposalAttachment {
+  id: string;
+  type: ProposalAttachmentType;
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+  sizeBytes: number;
+}
+
 export interface ProjectProposal {
   id: string;
   freelancerId: string;
   coverMessage: string;
   matchScore: number;
   submittedAt: string;
+  status: ProposalStatus;
+  attachments?: ProposalAttachment[];
 }
 
 export interface Project {
@@ -35,15 +50,23 @@ export interface Project {
   comments?: ProjectComment[];
 }
 
+function normalizeProposal(prop: ProjectProposal): ProjectProposal {
+  return {
+    ...prop,
+    status: prop.status ?? "pending",
+    attachments: Array.isArray(prop.attachments) ? prop.attachments : [],
+  };
+}
+
 function normalizeProjects(raw: Project[]): Project[] {
   return raw.map((p) => {
-    const proposals = Array.isArray(p.proposals) ? p.proposals : [];
-    return {
+    const proposals = (Array.isArray(p.proposals) ? p.proposals : []).map(normalizeProposal);
+    return stripSampleProposals({
       ...p,
       proposals,
       proposalsCount: proposals.length,
       comments: Array.isArray(p.comments) ? p.comments : [],
-    };
+    });
   });
 }
 
@@ -53,6 +76,17 @@ interface ProjectContextType {
     project: Omit<Project, "id" | "status" | "proposalsCount" | "comments" | "proposals">
   ) => void;
   addComment: (projectId: string, author: string, text: string) => void;
+  submitProposal: (
+    projectId: string,
+    freelancerId: string,
+    coverMessage: string,
+    attachments?: ProposalAttachment[]
+  ) => string | null;
+  updateProposalStatus: (
+    projectId: string,
+    proposalId: string,
+    status: "approved" | "denied"
+  ) => void;
   getProjects: () => Project[];
 }
 
@@ -60,13 +94,12 @@ const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const { talentPool } = useTalent();
-  const sampleProposalsSeeded = useRef(false);
 
   const [projects, setProjects] = useState<Project[]>(() => {
     const saved = localStorage.getItem("skillsync_projects");
     if (saved) {
       try {
-        return normalizeProjects(JSON.parse(saved) as Project[]).map(withSampleProposalIfMissing);
+        return normalizeProjects(JSON.parse(saved) as Project[]);
       } catch (e) {
         console.error("Failed to parse saved projects", e);
       }
@@ -109,19 +142,6 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     setProjects((prev) => syncProjectProposalsWithTalent(prev, talentPool));
   }, [projectSkillsKey, talentPool]);
 
-  useEffect(() => {
-    if (sampleProposalsSeeded.current || projects.length === 0) return;
-    const needsSeed = projects.some(
-      (p) => !(p.proposals ?? []).some((prop) => prop.freelancerId === SAMPLE_FREELANCER_ID)
-    );
-    if (!needsSeed) {
-      sampleProposalsSeeded.current = true;
-      return;
-    }
-    applyProjects((prev) => prev.map(withSampleProposalIfMissing));
-    sampleProposalsSeeded.current = true;
-  }, [projects, applyProjects]);
-
   const addProject = (
     projectData: Omit<Project, "id" | "status" | "proposalsCount" | "comments" | "proposals">
   ) => {
@@ -133,8 +153,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       proposalsCount: 0,
       comments: [],
     };
-    const newProject = withSampleProposalIfMissing(base);
-    applyProjects((prev) => [newProject, ...prev]);
+    applyProjects((prev) => [base, ...prev]);
   };
 
   const addComment = (projectId: string, author: string, text: string) => {
@@ -157,12 +176,78 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
+  const submitProposal = (
+    projectId: string,
+    freelancerId: string,
+    coverMessage: string,
+    attachments: ProposalAttachment[] = []
+  ): string | null => {
+    const trimmed = coverMessage.trim();
+    if (!trimmed) return "Please write a proposal message.";
+    if (trimmed.length < 20) return "Proposal should be at least 20 characters.";
+
+    const attachmentError = validateProposalAttachments(attachments);
+    if (attachmentError) return attachmentError;
+
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return "Project not found.";
+    if (project.status !== "Open") return "This project is no longer accepting proposals.";
+
+    const existing = (project.proposals ?? []).some((p) => p.freelancerId === freelancerId);
+    if (existing) return "You have already submitted a proposal for this project.";
+
+    const freelancer = talentPool.find((t) => t.id === freelancerId);
+    const matchScore = freelancer ? computeMatch(project, freelancer).matchScore : 0;
+
+    const proposal: ProjectProposal = {
+      id: `prop-${Date.now()}`,
+      freelancerId,
+      coverMessage: trimmed,
+      matchScore,
+      submittedAt: new Date().toISOString(),
+      status: "pending",
+      attachments,
+    };
+
+    applyProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        const proposals = [...(p.proposals ?? []), proposal];
+        return { ...p, proposals, proposalsCount: proposals.length };
+      })
+    );
+
+    return null;
+  };
+
+  const updateProposalStatus = (
+    projectId: string,
+    proposalId: string,
+    status: "approved" | "denied"
+  ) => {
+    applyProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        const proposals = (p.proposals ?? []).map((prop) =>
+          prop.id === proposalId ? { ...prop, status } : prop
+        );
+        const projectUpdate =
+          status === "approved"
+            ? { status: "Active" as const, proposals }
+            : { proposals };
+        return { ...p, ...projectUpdate, proposalsCount: proposals.length };
+      })
+    );
+  };
+
   const getProjects = () => {
     return projects;
   };
 
   return (
-    <ProjectContext.Provider value={{ projects, addProject, addComment, getProjects }}>
+    <ProjectContext.Provider
+      value={{ projects, addProject, addComment, submitProposal, updateProposalStatus, getProjects }}
+    >
       {children}
     </ProjectContext.Provider>
   );
