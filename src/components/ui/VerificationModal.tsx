@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, type VerificationMethod } from "../../context/UserContext";
+import { useToast } from "../../context/ToastContext";
 import {
   X,
   Shield,
@@ -21,6 +22,7 @@ interface VerificationModalProps {
 
 export function VerificationModal({ isOpen, onClose }: VerificationModalProps) {
   const { user, startVerification, resetVerification } = useUser();
+  const { showToast } = useToast();
   const [method, setMethod] = useState<VerificationMethod>(null);
   const [linkedinUrl, setLinkedinUrl] = useState("");
   const [dragActive, setDragActive] = useState(false);
@@ -55,6 +57,14 @@ export function VerificationModal({ isOpen, onClose }: VerificationModalProps) {
     };
     runSteps();
   }, [user.verification.status, method]);
+
+  const prevStatus = useRef(user.verification.status);
+  useEffect(() => {
+    if (prevStatus.current === "verifying" && user.verification.status === "verified") {
+      showToast("Verification successful", "success");
+    }
+    prevStatus.current = user.verification.status;
+  }, [user.verification.status, showToast]);
 
   if (!isOpen) return null;
 

@@ -639,6 +639,13 @@ export function Dashboard() {
 
         <div className="mt-auto pt-6 border-t border-white/5 space-y-2">
           <Link
+            to="/settings"
+            className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/5 text-xs text-[var(--color-muted)] hover:text-white transition-all hover:bg-white/[0.04]"
+          >
+            <span className="font-semibold">Profile Settings</span>
+            <ChevronRight size={14} />
+          </Link>
+          <Link
             to="/portfolio"
             className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/5 text-xs text-[var(--color-muted)] hover:text-white transition-all hover:bg-white/[0.04]"
           >

@@ -11,7 +11,6 @@ export interface WorkspaceAssistantContext {
     verified: boolean;
     bioAdded: boolean;
     skillsAdded: boolean;
-    portfolioAdded: boolean;
     clientPrefsAdded: boolean;
     freelancerPrefsAdded: boolean;
   };
@@ -51,8 +50,7 @@ function missingProfileSteps(ctx: WorkspaceAssistantContext): string[] {
   if (!c.verified) missing.push("complete identity verification");
   if (!c.bioAdded) missing.push("add a bio");
   if (roleView === "freelancer") {
-    if (!c.skillsAdded) missing.push("add at least 3 skills");
-    if (!c.portfolioAdded) missing.push("upload at least one portfolio item");
+    if (!c.skillsAdded) missing.push("add at least one skill");
     if (!c.freelancerPrefsAdded) missing.push("set experience or availability");
   } else {
     if (!c.clientPrefsAdded) missing.push("add company name or hiring preferences");
@@ -217,7 +215,7 @@ export function getAssistantResponse(
     const count = ctx.user.skills.length;
     const list = ctx.user.skills.slice(0, 8).join(", ") || "none yet";
     if (ctx.roleView === "freelancer" && count < 3) {
-      return `You have ${count} skill${count === 1 ? "" : "s"} (${list}). Add at least 3 skills in Profile Completeness so clients can match you to jobs.`;
+      return `You have ${count} skill${count === 1 ? "" : "s"} (${list}). Add skills in Profile Settings so clients can match you to jobs.`;
     }
     return `Your skills (${count}): ${list}. ${ctx.roleView === "client" ? "Required skills on your job posts are matched against freelancer profiles." : "These are matched against project requirements when you apply."}`;
   }
@@ -226,7 +224,7 @@ export function getAssistantResponse(
   if (includesAny(q, ["portfolio", "work sample", "showcase"])) {
     const n = ctx.user.portfolioItems.length;
     if (n === 0) {
-      return "No portfolio items yet. In Profile Completeness, expand Portfolio and add a project title and category — it helps clients evaluate your work.";
+      return "No portfolio items yet. Visit the Portfolio page from your dashboard to showcase your work.";
     }
     return `You have ${n} portfolio item${n === 1 ? "" : "s"}: ${ctx.user.portfolioItems.map((i) => i.title).join(", ")}.`;
   }

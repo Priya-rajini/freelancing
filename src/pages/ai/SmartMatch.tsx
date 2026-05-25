@@ -2,7 +2,9 @@ import { motion } from "framer-motion";
 import { freelancers } from "../../data/mockData";
 import { RevealSection } from "../../components/ui/RevealSection";
 import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Lock, Sparkles } from "lucide-react";
+import { useUser } from "../../context/UserContext";
+import { AI_MATCHING_UNLOCK_PERCENT } from "../../utils/profileCompleteness";
 
 const dimensions = [
   { label: "Skills overlap", value: 96, color: "var(--color-warm)" },
@@ -13,8 +15,32 @@ const dimensions = [
 ];
 
 export function SmartMatch() {
+  const { completeness } = useUser();
   const match = freelancers[0];
   const overall = 94;
+  const unlocked = completeness.unlockedAiMatching;
+
+  if (!unlocked) {
+    return (
+      <div className="pt-28 pb-24 min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-md text-center glass rounded-2xl p-8 border border-[var(--color-sky)]/20">
+          <Lock size={32} className="mx-auto text-[var(--color-sky)] mb-4" />
+          <h1 className="text-display text-2xl font-medium">AI Matching Locked</h1>
+          <p className="text-sm text-[var(--color-muted)] mt-3">
+            Unlock Smart Match at {AI_MATCHING_UNLOCK_PERCENT}% profile completion. You&apos;re currently at{" "}
+            {completeness.score}%.
+          </p>
+          <Link
+            to="/settings"
+            className="inline-flex items-center gap-2 mt-6 px-5 py-2.5 rounded-full bg-[var(--color-warm)] text-[#0a0a0b] text-sm font-medium"
+          >
+            <Sparkles size={16} />
+            Complete your profile
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pt-28 pb-24 min-h-screen">

@@ -6,6 +6,7 @@ import { Projects } from "./pages/Projects";
 import { Community } from "./pages/Community";
 import { Mentorship } from "./pages/Mentorship";
 import { Dashboard } from "./pages/Dashboard";
+import { Settings } from "./pages/Settings";
 import { Profile } from "./pages/Profile";
 import { Portfolio } from "./pages/Portfolio";
 import { ProjectDetail } from "./pages/ProjectDetail";
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="community" element={<Community />} />
           <Route path="mentorship" element={<Mentorship />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="settings" element={<Settings />} />
           <Route path="profile/:id" element={<Profile />} />
           <Route path="portfolio" element={<Portfolio />} />
           <Route path="ai/smart-match" element={<SmartMatch />} />
