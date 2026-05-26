@@ -22,7 +22,7 @@ export const freelancers = [
     avatar: "JO",
     color: "#6ee7b7",
     skills: ["React", "Node", "PostgreSQL"],
-    verified: ["React", "System Design"],
+    verified: ["Verified React Developer", "System Design"],
     bio: "Built payment infra for 3 fintech startups. Performance obsessed.",
   },
   {
@@ -61,9 +61,10 @@ export const liveHiring = [
   { client: "Vault Finance", role: "Security Audit", time: "18m ago", budget: "$12k" },
 ];
 
+/** Active engagements (freelancer already hired) */
 export const projects = [
   {
-    id: "p1",
+    id: "vault-redesign",
     title: "Fintech Dashboard Redesign",
     client: "Vault Finance",
     status: "In Progress",
@@ -72,7 +73,7 @@ export const projects = [
     budget: "$12,400",
   },
   {
-    id: "p2",
+    id: "helix-chat",
     title: "AI Chat Widget",
     client: "Helix AI",
     status: "Review",
@@ -81,7 +82,7 @@ export const projects = [
     budget: "$8,200",
   },
   {
-    id: "p3",
+    id: "bloom-brand",
     title: "Brand System v2",
     client: "Bloom Studio",
     status: "Discovery",
@@ -90,6 +91,114 @@ export const projects = [
     budget: "$5,600",
   },
 ];
+
+/** Open listings freelancers can browse and submit proposals to */
+export const openProjects = [
+  {
+    id: "arcadia-react-dashboard",
+    title: "Senior React Developer — Analytics Dashboard",
+    client: "Arcadia Labs",
+    budget: "$8,000 – $12,000",
+    budgetHint: "Fixed price",
+    timeline: "6–8 weeks",
+    location: "Remote",
+    posted: "2 days ago",
+    proposalsCount: 14,
+    skills: ["React", "TypeScript", "Tailwind", "Recharts"],
+    urgency: "high",
+    description:
+      "We're rebuilding our B2B analytics dashboard used by 2,000+ ops teams. You will own frontend architecture, component library integration, and performance tuning for large datasets.",
+    scope: [
+      "Migrate legacy class components to React 18 + hooks",
+      "Build 8 dashboard views with real-time data hooks",
+      "Establish Storybook documentation for the design system",
+    ],
+  },
+  {
+    id: "northwind-brand-refresh",
+    title: "Brand Identity & Marketing Site",
+    client: "Northwind",
+    budget: "$4,000 – $6,500",
+    budgetHint: "Fixed price",
+    timeline: "4–5 weeks",
+    location: "Remote · US overlap preferred",
+    posted: "5 days ago",
+    proposalsCount: 22,
+    skills: ["Figma", "Brand Strategy", "Webflow"],
+    urgency: "medium",
+    description:
+      "Series A climate-tech startup needs a cohesive brand system and a lightweight marketing site before their product launch in Q3.",
+    scope: [
+      "Logo refinement and color/type system",
+      "12-page marketing site in Webflow",
+      "Social templates and pitch deck styling",
+    ],
+  },
+  {
+    id: "helix-ml-pipeline",
+    title: "ML Pipeline Engineer — RAG System",
+    client: "Helix AI",
+    budget: "$12,000 – $18,000",
+    budgetHint: "Milestone-based",
+    timeline: "10–12 weeks",
+    location: "Remote",
+    posted: "1 week ago",
+    proposalsCount: 9,
+    skills: ["Python", "PyTorch", "LLMs", "MLOps"],
+    urgency: "medium",
+    description:
+      "Production RAG pipeline for enterprise document Q&A. Experience with vector DBs and evaluation frameworks required.",
+    scope: [
+      "Ingestion pipeline for PDF/HTML sources",
+      "Retrieval + reranking with observability",
+      "Latency benchmarks and cost optimization report",
+    ],
+  },
+  {
+    id: "bloom-motion-kit",
+    title: "Motion Design System",
+    client: "Bloom Studio",
+    budget: "$3,200 – $4,800",
+    budgetHint: "Fixed price",
+    timeline: "3–4 weeks",
+    location: "Remote",
+    posted: "3 days ago",
+    proposalsCount: 18,
+    skills: ["After Effects", "Lottie", "Figma"],
+    urgency: "low",
+    description:
+      "Create a motion language for our SaaS product — micro-interactions, loading states, and onboarding transitions that feel premium but lightweight.",
+    scope: [
+      "Motion principles doc + 20 Lottie exports",
+      "Figma prototype with interaction specs",
+      "Handoff guide for engineering",
+    ],
+  },
+  {
+    id: "vault-security-audit",
+    title: "Frontend Security Audit",
+    client: "Vault Finance",
+    budget: "$10,000 – $14,000",
+    budgetHint: "Fixed price",
+    timeline: "5–6 weeks",
+    location: "Remote · NDA required",
+    posted: "8 hours ago",
+    proposalsCount: 6,
+    skills: ["React", "Security", "OWASP"],
+    urgency: "high",
+    description:
+      "Independent audit of our customer-facing React app before SOC2. You will review auth flows, XSS surfaces, and dependency risks.",
+    scope: [
+      "Threat model for top 12 user flows",
+      "Pen-test style review with remediation report",
+      "Pair with internal eng on critical fixes",
+    ],
+  },
+];
+
+export function getOpenProject(id: string) {
+  return openProjects.find((p) => p.id === id);
+}
 
 export const portfolioItems = [
   { id: 1, title: "Arc Browser Onboarding", category: "Product", size: "tall", image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&q=80", metrics: { views: "24k", conversion: "+18%" } },
