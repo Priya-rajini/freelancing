@@ -105,7 +105,7 @@ export function SkillVerification() {
             <div>
               <h1 className="text-display text-3xl font-medium">Skill Verification</h1>
               <p className="text-[var(--color-muted)] text-sm">
-                AI-generated MCQ + practical question → earn a verified badge
+                Skill badges are verified through a short AI-generated skill test (MCQ + practical question) — "Verified React Developer".
               </p>
             </div>
           </div>
@@ -121,7 +121,7 @@ export function SkillVerification() {
               className="mt-10 space-y-3"
             >
               <p className="text-sm text-[var(--color-muted)] mb-4">
-                Choose a skill. Pass 2 MCQs and one practical prompt to unlock your badge on your profile.
+                Choose a skill. Pass 2 MCQs and one practical question to unlock your badge on your profile.
               </p>
               {skillTests.map((t) => {
                 const earned = user.verified.includes(t.badgeName);

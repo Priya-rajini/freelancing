@@ -73,7 +73,26 @@ export interface UserProfile {
   companyName?: string;
   hiringPreferences?: string;
   experienceYears?: string;
-  availability?: string;
+  hourlyRate: string;
+  availability: AvailabilityStatus;
+  education: EducationEntry[];
+  experience: ExperienceEntry[];
+  proposals: Proposal[];
+  contracts: ActiveContract[];
+  earnings: {
+    total: number;
+    available: number;
+    pending: number;
+  };
+  withdrawals: Withdrawal[];
+  clientReviews: {
+    id: string;
+    author: string;
+    company: string;
+    rating: number;
+    text: string;
+    date: string;
+  }[];
 }
 
 interface StoredAccount {
@@ -124,7 +143,15 @@ function makeInitialProfile(): UserProfile {
     companyName: "",
     hiringPreferences: "",
     experienceYears: "",
-    availability: "",
+    hourlyRate: "$95/hr",
+    availability: "available",
+    education: [],
+    experience: [],
+    proposals: [],
+    contracts: defaultContracts as ActiveContract[],
+    earnings: defaultEarnings,
+    withdrawals: defaultWithdrawals as Withdrawal[],
+    clientReviews: defaultClientReviews,
   };
 }
 
@@ -167,6 +194,10 @@ interface UserContextType {
   startVerification: (method: VerificationMethod, value: string) => Promise<void>;
   resetVerification: () => void;
   updateProfileFields: (fields: Partial<UserProfile>) => void;
+  updateDeliverableStatus: (contractId: string, deliverableId: string, status: DeliverableStatus) => void;
+  uploadContractFile: (contractId: string, fileName: string, fileSize: string) => void;
+  sendContractMessage: (contractId: string, text: string) => void;
+  requestWithdrawal: (amount: number, method: string) => void;
   completeness: ProfileCompletenessResult & {
     checklist: ProfileCompletenessResult["checklist"] & {
       clientPrefsAdded: boolean;
@@ -194,6 +225,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       }
     }
     return {
+      email: "",
       name: "",
       avatar: "",
       color: "#e8a87c",
@@ -210,6 +242,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         value: null,
       },
       isRegistered: false,
+      companyName: "",
+      hiringPreferences: "",
+      experienceYears: "",
       hourlyRate: "$95/hr",
       availability: "available",
       education: [],
@@ -227,15 +262,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("skillsync_user_profile", JSON.stringify(user));
     }
   }, [user]);
-
-  const signup = (name: string, location: string, color: string) => {
-    const initials = name
-      .trim()
-      .split(/\s+/)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
 
   const signup = (
     name: string,
@@ -264,11 +290,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       avatar: initialsFromName(name) || "U",
       isRegistered: true,
       role: null,
-    }));
+    };
+
+    const accounts = loadAccounts();
+    accounts.push({ email: normalizedEmail, password, profile });
+    saveAccounts(accounts);
+
+    setUser(profile);
+    return null;
   };
 
   const logout = () => {
     setUser({
+      email: "",
       name: "",
       avatar: "",
       color: "#e8a87c",
@@ -285,6 +319,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         value: null,
       },
       isRegistered: false,
+      companyName: "",
+      hiringPreferences: "",
+      experienceYears: "",
       hourlyRate: "$95/hr",
       availability: "available",
       education: [],
@@ -296,6 +333,23 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       clientReviews: defaultClientReviews,
     });
     localStorage.removeItem("skillsync_user_profile");
+  };
+
+  const login = (email: string, password: string): string | null => {
+    const normalizedEmail = normalizeEmail(email);
+    const accounts = loadAccounts();
+    const account = accounts.find((a) => normalizeEmail(a.email) === normalizedEmail);
+    
+    if (!account) {
+      return "No account found with this email address.";
+    }
+    
+    if (account.password !== password) {
+      return "Incorrect password.";
+    }
+    
+    setUser(account.profile);
+    return null;
   };
 
   const setRole = (role: UserRole) => {
@@ -522,6 +576,59 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
+  const updateProfileFields = (fields: Partial<UserProfile>) => {
+    setUser((prev) => ({ ...prev, ...fields }));
+  };
+
+  const uploadContractFile = (contractId: string, fileName: string, fileSize: string) => {
+    const file: ContractFile = {
+      id: Date.now().toString(),
+      name: fileName,
+      size: fileSize,
+      uploadedAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    };
+    setUser((prev) => ({
+      ...prev,
+      contracts: prev.contracts.map((c) =>
+        c.id === contractId ? { ...c, files: [...c.files, file] } : c
+      ),
+    }));
+  };
+
+  const sendContractMessage = (contractId: string, text: string) => {
+    const msg: ContractMessage = {
+      id: Date.now().toString(),
+      from: "freelancer",
+      text,
+      time: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+    };
+    setUser((prev) => ({
+      ...prev,
+      contracts: prev.contracts.map((c) =>
+        c.id === contractId ? { ...c, messages: [...c.messages, msg] } : c
+      ),
+    }));
+  };
+
+  const requestWithdrawal = (amount: number, method: string) => {
+    if (amount <= 0 || amount > user.earnings.available) return;
+    const withdrawal: Withdrawal = {
+      id: Date.now().toString(),
+      amount,
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      status: "processing",
+      method,
+    };
+    setUser((prev) => ({
+      ...prev,
+      earnings: {
+        ...prev.earnings,
+        available: prev.earnings.available - amount,
+      },
+      withdrawals: [withdrawal, ...prev.withdrawals],
+    }));
+  };
+
   const baseCompleteness = useMemo(() => computeProfileCompleteness(user), [user]);
 
   const clientPrefsAdded =
@@ -567,6 +674,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         addVerifiedBadge,
         startVerification,
         resetVerification,
+        updateProfileFields,
         updateDeliverableStatus,
         uploadContractFile,
         sendContractMessage,
@@ -587,3 +695,124 @@ export function useUser() {
   }
   return context;
 }
+
+export interface ActiveContract {
+  id: string;
+  projectTitle: string;
+  clientName: string;
+  clientColor: string;
+  budget: string;
+  dueDate: string;
+  progress: number;
+  status: "active" | "completed" | "paused";
+  deliverables: {
+    id: string;
+    title: string;
+    status: "pending" | "submitted" | "approved";
+  }[];
+  files: ContractFile[];
+  messages: ContractMessage[];
+}
+
+export interface ContractFile {
+  id: string;
+  name: string;
+  size: string;
+  uploadedAt: string;
+}
+
+export interface ContractMessage {
+  id: string;
+  from: "freelancer" | "client";
+  text: string;
+  time: string;
+}
+
+export interface Withdrawal {
+  id: string;
+  amount: number;
+  date: string;
+  status: "processing" | "completed";
+  method: string;
+}
+
+export type DeliverableStatus = "pending" | "submitted" | "approved";
+
+// Default Mock Data for workspaces
+const defaultContracts: ActiveContract[] = [
+  {
+    id: "c-1",
+    projectTitle: "Vault API Refactoring",
+    clientName: "Vault FinTech",
+    clientColor: "#c084fc",
+    budget: "$4,500",
+    dueDate: "June 15, 2026",
+    progress: 33,
+    status: "active",
+    deliverables: [
+      { id: "d-1", title: "API Endpoint Specs & Design", status: "approved" },
+      { id: "d-2", title: "Middleware Integration & OAuth", status: "pending" },
+      { id: "d-3", title: "Testing Suite & Documentation", status: "pending" },
+    ],
+    files: [
+      { id: "f-1", name: "vault_api_docs_v2.pdf", size: "1.2 MB", uploadedAt: "May 20" },
+    ],
+    messages: [
+      { id: "m-1", from: "client", text: "Welcome to the workspace! Let's get started on the middleware flow first.", time: "10:14 AM" },
+      { id: "m-2", from: "freelancer", text: "Absolutely, I am drafting the schema mockups today.", time: "11:05 AM" },
+    ],
+  },
+  {
+    id: "c-2",
+    projectTitle: "Marketing Landing Page Redesign",
+    clientName: "EcoSphere Corp",
+    clientColor: "#6ee7b7",
+    budget: "$2,800",
+    dueDate: "June 20, 2026",
+    progress: 100,
+    status: "completed",
+    deliverables: [
+      { id: "d-4", title: "Hero Section Prototypes", status: "approved" },
+      { id: "d-5", title: "Interactive Tailwind Assembly", status: "approved" },
+    ],
+    files: [],
+    messages: [],
+  },
+];
+
+const defaultEarnings = {
+  total: 7300,
+  available: 2800,
+  pending: 4500,
+};
+
+const defaultWithdrawals: Withdrawal[] = [
+  { id: "w-1", amount: 4500, date: "May 10, 2026", status: "completed", method: "Bank Transfer (**** 4820)" },
+];
+
+const defaultClientReviews = [
+  {
+    id: "r-1",
+    author: "Sarah Jenkins",
+    company: "EcoSphere Corp",
+    rating: 5,
+    text: "Exceptional UI design and smooth communication. The landing page load speed is blazing fast now and our conversion rates increased immediately.",
+    date: "May 12, 2026",
+  },
+  {
+    id: "r-2",
+    author: "Marcus Vance",
+    company: "Vault FinTech",
+    rating: 5,
+    text: "Maya is an incredible product designer. Her refactoring of our onboarding flows reduced drop-off by 28% and set a new standard for our entire product design system.",
+    date: "April 28, 2026",
+  },
+  {
+    id: "r-3",
+    author: "Dr. David Kincaid",
+    company: "Peak Labs",
+    rating: 5,
+    text: "Brilliant components architecture and clean React/TypeScript code. Clean implementation, high attention to detail, and fast delivery of our analytics UI. Absolute professional!",
+    date: "March 15, 2026",
+  },
+];

@@ -45,10 +45,10 @@ export function FreelancerOverviewPanel({ skillBadges, onNavigate }: FreelancerO
             className="w-full block glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all text-left"
           >
             <div className="flex justify-between">
-              <h3 className="font-medium text-sm">{c.title}</h3>
+              <h3 className="font-medium text-sm">{c.projectTitle}</h3>
               <span className="text-[11px] text-[var(--color-muted)]">{c.progress}%</span>
             </div>
-            <p className="text-xs text-[var(--color-muted)] mt-0.5">{c.client}</p>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">{c.clientName}</p>
           </button>
         ))}
       </div>

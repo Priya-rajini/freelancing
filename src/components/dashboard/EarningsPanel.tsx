@@ -35,7 +35,7 @@ export function EarningsPanel() {
 
       <div className="grid sm:grid-cols-3 gap-4">
         {[
-          { label: "Total earned", value: earnings.totalEarned, icon: Wallet, accent: "var(--color-mint)" },
+          { label: "Total earned", value: earnings.total, icon: Wallet, accent: "var(--color-mint)" },
           { label: "Pending", value: earnings.pending, icon: Clock, accent: "var(--color-warm)" },
           { label: "Available", value: earnings.available, icon: ArrowDownToLine, accent: "var(--color-sky)" },
         ].map((card, i) => (
