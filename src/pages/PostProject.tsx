@@ -70,6 +70,8 @@ export function PostProject() {
         budget: Number(budget),
         deadline,
         projectType,
+        clientName: user.name || "Client",
+        clientEmail: user.email || "client@example.com",
       });
 
       setIsSubmitting(false);

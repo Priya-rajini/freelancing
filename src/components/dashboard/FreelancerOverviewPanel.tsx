@@ -1,5 +1,8 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useUser } from "../../context/UserContext";
+import { useProjects } from "../../context/ProjectContext";
+import { useTalent } from "../../context/TalentContext";
 import { projects } from "../../data/mockData";
 import { Clock, ChevronRight } from "lucide-react";
 
@@ -10,6 +13,26 @@ interface FreelancerOverviewPanelProps {
 
 export function FreelancerOverviewPanel({ skillBadges, onNavigate }: FreelancerOverviewPanelProps) {
   const { user } = useUser();
+  const { projects: contextProjects } = useProjects();
+  const { myTalentId } = useTalent();
+
+  const myProposals = useMemo(() => {
+    const list: any[] = [];
+    contextProjects.forEach((proj) => {
+      const prop = proj.proposals?.find((p) => p.freelancerId === myTalentId || p.freelancerEmail === user.email);
+      if (prop) {
+        list.push({
+          id: prop.id,
+          projectTitle: proj.title,
+          bidAmount: prop.bidAmount,
+          status: prop.status === "approved" ? "accepted" : prop.status === "denied" ? "declined" : "pending",
+          score: prop.matchScore,
+          clientEmail: proj.clientEmail || "client@example.com",
+        });
+      }
+    });
+    return list;
+  }, [contextProjects, myTalentId, user.email]);
 
   return (
     <div className="space-y-8">
@@ -115,17 +138,25 @@ export function FreelancerOverviewPanel({ skillBadges, onNavigate }: FreelancerO
             Browse open →
           </Link>
         </div>
-        {user.proposals.length === 0 ? (
+        {myProposals.length === 0 ? (
           <p className="text-sm text-[var(--color-muted)] glass rounded-xl p-5">
             Submit proposals on open project listings.
           </p>
         ) : (
-          user.proposals.slice(0, 2).map((prop) => (
+          myProposals.slice(0, 2).map((prop) => (
             <div key={prop.id} className="glass rounded-xl p-4 text-sm">
               <p className="font-medium">{prop.projectTitle}</p>
               <p className="text-xs text-[var(--color-muted)] mt-1">
-                {prop.bidAmount} · {prop.status} · {prop.score}% match
+                {prop.bidAmount} · <span className={
+                  prop.status === "accepted" ? "text-[var(--color-mint)] font-medium" :
+                  prop.status === "declined" ? "text-red-400 font-medium" : ""
+                }>{prop.status === "accepted" ? "Approved" : prop.status === "declined" ? "Denied" : "Pending"}</span> · {prop.score}% match
               </p>
+              {prop.status === "accepted" && (
+                <p className="text-[11px] text-[var(--color-muted)] mt-1.5 border-t border-white/5 pt-1.5">
+                  Client Email: <span className="text-white">{prop.clientEmail}</span>
+                </p>
+              )}
             </div>
           ))
         )}

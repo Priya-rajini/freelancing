@@ -91,6 +91,7 @@ export function ProjectDetail() {
   const { user } = useUser();
   const project = projects.find((p) => p.id === id);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [freelancerEmail, setFreelancerEmail] = useState(user.email || "");
   const [proposalMessage, setProposalMessage] = useState("");
   const [proposalImage, setProposalImage] = useState<ProposalAttachment | null>(null);
   const [proposalResume, setProposalResume] = useState<ProposalAttachment | null>(null);
@@ -114,10 +115,24 @@ export function ProjectDetail() {
   const handleSubmitProposal = () => {
     if (!project || !myTalentId) return;
     setProposalError("");
+
+    if (!freelancerEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(freelancerEmail.trim())) {
+      setProposalError("Please enter a valid email address.");
+      return;
+    }
+
     const attachments = [proposalImage, proposalResume].filter(
       (a): a is ProposalAttachment => a !== null
     );
-    const err = submitProposal(project.id, myTalentId, proposalMessage, attachments);
+    const err = submitProposal(
+      project.id,
+      myTalentId,
+      freelancerEmail.trim(),
+      proposalMessage,
+      project.projectType === "Fixed" ? `$${project.budget.toLocaleString()}` : `$${project.budget}/hr`,
+      "4 weeks",
+      attachments
+    );
     if (err) {
       setProposalError(err);
       return;
@@ -246,7 +261,7 @@ export function ProjectDetail() {
               ) : myProposal ? (
                 <div className="glass rounded-xl p-6">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium">Your proposal</p>
+                    <p className="text-sm font-medium text-white">Your proposal</p>
                     <ProposalStatusBadge status={myProposal.status} />
                   </div>
                   <p className="text-sm text-[var(--color-muted)] mt-3 leading-relaxed whitespace-pre-wrap">
@@ -256,6 +271,11 @@ export function ProjectDetail() {
                   <p className="text-[11px] text-[var(--color-muted)] mt-3">
                     {proposalStatusLabel(myProposal.status)} · Match score {myProposal.matchScore}%
                   </p>
+                  {myProposal.status === "approved" && (
+                    <div className="mt-3 text-xs text-[var(--color-mint)] font-medium border-t border-white/5 pt-3">
+                      Client Contact Email: <strong className="text-white font-semibold">{project.clientEmail || "client@example.com"}</strong>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="glass rounded-xl p-6">
@@ -263,6 +283,24 @@ export function ProjectDetail() {
                     Tell the client why you are a good fit. Your proposal will appear in their
                     dashboard with AI match metrics.
                   </p>
+                  
+                  <div className="mb-4">
+                    <label className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-1.5 block">
+                      Your Email Address <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={freelancerEmail}
+                      onChange={(e) => {
+                        setFreelancerEmail(e.target.value);
+                        setProposalError("");
+                      }}
+                      placeholder="you@example.com"
+                      className="w-full bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[var(--color-warm)]/40 text-white placeholder-white/20"
+                      required
+                    />
+                  </div>
+
                   <textarea
                     value={proposalMessage}
                     onChange={(e) => {
@@ -410,11 +448,11 @@ export function ProjectDetail() {
                               {freelancer?.avatar ?? "?"}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-medium text-sm truncate">
+                              <p className="font-medium text-sm text-white truncate">
                                 {freelancer?.name ?? "Freelancer"}
                               </p>
                               <p className="text-[11px] text-[var(--color-muted)] truncate">
-                                {freelancer?.headline ?? "Applicant"}
+                                Email: {proposal.freelancerEmail}
                               </p>
                             </div>
                           </div>

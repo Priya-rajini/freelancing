@@ -120,6 +120,9 @@ export function ProposalEvaluator() {
                 {proposal.coverMessage}
               </p>
               <ProposalAttachmentList attachments={proposal.attachments} />
+              <div className="mt-4 pt-3 border-t border-white/5 text-xs text-[var(--color-muted)]">
+                Freelancer Email: <strong className="text-white font-semibold">{proposal.freelancerEmail}</strong>
+              </div>
             </div>
           </RevealSection>
         ) : (

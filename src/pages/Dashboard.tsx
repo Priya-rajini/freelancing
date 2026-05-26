@@ -100,18 +100,17 @@ export function Dashboard() {
   }, [selectedProject]);
 
   const myApplications = useMemo(() => {
-    if (!myTalentId) return [];
     return clientProjects
       .flatMap((p) =>
         (p.proposals ?? [])
-          .filter((prop) => prop.freelancerId === myTalentId)
+          .filter((prop) => prop.freelancerId === myTalentId || prop.freelancerEmail === user.email)
           .map((prop) => ({ project: p, proposal: prop }))
       )
       .sort(
         (a, b) =>
           new Date(b.proposal.submittedAt).getTime() - new Date(a.proposal.submittedAt).getTime()
       );
-  }, [clientProjects, myTalentId]);
+  }, [clientProjects, myTalentId, user.email]);
   const [messages, setMessages] = useState<{ role: "ai" | "user"; text: string }[]>([]);
   const [aiTyping, setAiTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -943,6 +942,9 @@ export function Dashboard() {
                                     <div className="min-w-0">
                                       <div className="text-xs font-semibold text-white truncate">
                                         {applicant?.name ?? "Freelancer"}
+                                      </div>
+                                      <div className="text-[10px] text-[var(--color-muted)] mt-0.5 truncate">
+                                        Email: {prop.freelancerEmail}
                                       </div>
                                       <div className="text-[10px] text-[var(--color-muted)] mt-0.5 capitalize">
                                         {prop.status} · AI match {prop.matchScore}%

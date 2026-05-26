@@ -3,6 +3,7 @@ import { useTalent } from "./TalentContext";
 import { stripSampleProposals, syncProjectProposalsWithTalent } from "../utils/proposals";
 import { computeMatch } from "../utils/matching";
 import { validateProposalAttachments } from "../utils/proposalAttachments";
+import { openProjects as mockOpenProjects, projects as mockActiveProjects } from "../data/mockData";
 
 export type ProjectType = "Fixed" | "Hourly";
 export type ProjectStatus = "Open" | "Active" | "Completed";
@@ -29,11 +30,14 @@ export interface ProposalAttachment {
 export interface ProjectProposal {
   id: string;
   freelancerId: string;
+  freelancerEmail: string;
   coverMessage: string;
   matchScore: number;
   submittedAt: string;
   status: ProposalStatus;
   attachments?: ProposalAttachment[];
+  bidAmount: string;
+  timeline: string;
 }
 
 export interface Project {
@@ -48,6 +52,8 @@ export interface Project {
   proposalsCount: number;
   proposals?: ProjectProposal[];
   comments?: ProjectComment[];
+  clientName?: string;
+  clientEmail?: string;
 }
 
 function normalizeProposal(prop: ProjectProposal): ProjectProposal {
@@ -70,16 +76,89 @@ function normalizeProjects(raw: Project[]): Project[] {
   });
 }
 
+function makeDefaultProjects(): Project[] {
+  const list: Project[] = [];
+
+  mockOpenProjects.forEach((p) => {
+    let budgetVal = 5000;
+    const cleanStr = p.budget.replace(/[^0-9–]/g, "");
+    if (cleanStr.includes("–")) {
+      const parts = cleanStr.split("–").map((num) => parseFloat(num));
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        budgetVal = Math.round((parts[0] + parts[1]) / 2);
+      }
+    } else {
+      const parsed = parseFloat(cleanStr);
+      if (!isNaN(parsed)) budgetVal = parsed;
+    }
+
+    list.push({
+      id: p.id,
+      title: p.title,
+      description: p.description,
+      requiredSkills: p.skills,
+      budget: budgetVal,
+      deadline: "2026-07-15",
+      projectType: p.budgetHint.toLowerCase().includes("hour") ? "Hourly" : "Fixed",
+      status: "Open",
+      proposalsCount: 0,
+      proposals: [],
+      comments: [],
+      clientName: p.client,
+      clientEmail: `${p.client.toLowerCase().replace(/[^a-z0-9]/g, "")}@example.com`,
+    });
+  });
+
+  mockActiveProjects.forEach((p) => {
+    let budgetVal = parseFloat(p.budget.replace(/[^0-9.]/g, ""));
+    if (isNaN(budgetVal)) budgetVal = 8000;
+
+    list.push({
+      id: p.id,
+      title: p.title,
+      description: `Active contract for ${p.title}.`,
+      requiredSkills: ["React", "TypeScript"],
+      budget: budgetVal,
+      deadline: "2026-06-30",
+      projectType: "Fixed",
+      status: "Active",
+      proposalsCount: 1,
+      proposals: [
+        {
+          id: `prop-${p.id}-maya`,
+          freelancerId: "maya-chen",
+          freelancerEmail: "maya@chen.com",
+          coverMessage: "I would be happy to work on this engagement. Let's get started on the deliverables.",
+          matchScore: 94,
+          submittedAt: new Date(Date.now() - 86400000).toISOString(),
+          status: "approved",
+          bidAmount: p.budget,
+          timeline: "6 weeks",
+          attachments: [],
+        },
+      ],
+      comments: [],
+      clientName: p.client,
+      clientEmail: `${p.client.toLowerCase().replace(/[^a-z0-9]/g, "")}@example.com`,
+    });
+  });
+
+  return list;
+}
+
 interface ProjectContextType {
   projects: Project[];
   addProject: (
-    project: Omit<Project, "id" | "status" | "proposalsCount" | "comments" | "proposals">
+    project: Omit<Project, "id" | "status" | "proposalsCount" | "comments" | "proposals"> & { clientName?: string; clientEmail?: string }
   ) => void;
   addComment: (projectId: string, author: string, text: string) => void;
   submitProposal: (
     projectId: string,
     freelancerId: string,
+    freelancerEmail: string,
     coverMessage: string,
+    bidAmount: string,
+    timeline: string,
     attachments?: ProposalAttachment[]
   ) => string | null;
   updateProposalStatus: (
@@ -104,7 +183,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         console.error("Failed to parse saved projects", e);
       }
     }
-    return [];
+    return makeDefaultProjects();
   });
 
   const applyProjects = useCallback(
@@ -143,7 +222,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   }, [projectSkillsKey, talentPool]);
 
   const addProject = (
-    projectData: Omit<Project, "id" | "status" | "proposalsCount" | "comments" | "proposals">
+    projectData: Omit<Project, "id" | "status" | "proposalsCount" | "comments" | "proposals"> & { clientName?: string; clientEmail?: string }
   ) => {
     const base: Project = {
       ...projectData,
@@ -179,12 +258,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const submitProposal = (
     projectId: string,
     freelancerId: string,
+    freelancerEmail: string,
     coverMessage: string,
+    bidAmount: string,
+    timeline: string,
     attachments: ProposalAttachment[] = []
   ): string | null => {
     const trimmed = coverMessage.trim();
     if (!trimmed) return "Please write a proposal message.";
     if (trimmed.length < 20) return "Proposal should be at least 20 characters.";
+    if (!freelancerEmail.trim()) return "Freelancer email is required.";
 
     const attachmentError = validateProposalAttachments(attachments);
     if (attachmentError) return attachmentError;
@@ -193,7 +276,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     if (!project) return "Project not found.";
     if (project.status !== "Open") return "This project is no longer accepting proposals.";
 
-    const existing = (project.proposals ?? []).some((p) => p.freelancerId === freelancerId);
+    const existing = (project.proposals ?? []).some((p) => p.freelancerId === freelancerId || p.freelancerEmail === freelancerEmail);
     if (existing) return "You have already submitted a proposal for this project.";
 
     const freelancer = talentPool.find((t) => t.id === freelancerId);
@@ -202,11 +285,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const proposal: ProjectProposal = {
       id: `prop-${Date.now()}`,
       freelancerId,
+      freelancerEmail: freelancerEmail.trim(),
       coverMessage: trimmed,
       matchScore,
       submittedAt: new Date().toISOString(),
       status: "pending",
       attachments,
+      bidAmount,
+      timeline,
     };
 
     applyProjects((prev) =>

@@ -2,6 +2,9 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Send, Sparkles, CheckCircle2 } from "lucide-react";
 import { useUser } from "../../context/UserContext";
+import { useProjects, type ProposalAttachment } from "../../context/ProjectContext";
+import { useTalent } from "../../context/TalentContext";
+import { ProposalAttachmentPicker } from "../ui/ProposalAttachmentPicker";
 import { Link } from "react-router-dom";
 
 interface ProposalFormProps {
@@ -24,9 +27,15 @@ export function ProposalForm({
   compact = false,
 }: ProposalFormProps) {
   const { user, submitProposal } = useUser();
+  const { submitProposal: submitProjectProposal } = useProjects();
+  const { myTalentId } = useTalent();
+
+  const [freelancerEmail, setFreelancerEmail] = useState(user.email || "");
   const [bidAmount, setBidAmount] = useState(suggestedBudget.split("–")[0]?.trim() || "");
   const [timeline, setTimeline] = useState(suggestedTimeline);
   const [coverMessage, setCoverMessage] = useState("");
+  const [proposalImage, setProposalImage] = useState<ProposalAttachment | null>(null);
+  const [proposalResume, setProposalResume] = useState<ProposalAttachment | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
@@ -35,6 +44,11 @@ export function ProposalForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (!freelancerEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(freelancerEmail.trim())) {
+      setError("Please enter a valid email address.");
+      return;
+    }
     if (!bidAmount.trim()) {
       setError("Enter your bid amount.");
       return;
@@ -47,6 +61,26 @@ export function ProposalForm({
       setError("Cover message should be at least 40 characters.");
       return;
     }
+
+    const attachments = [proposalImage, proposalResume].filter(
+      (a): a is ProposalAttachment => a !== null
+    );
+
+    const err = submitProjectProposal(
+      projectId,
+      myTalentId || `talent-${Date.now()}`,
+      freelancerEmail.trim(),
+      coverMessage.trim(),
+      bidAmount.trim(),
+      timeline.trim(),
+      attachments
+    );
+
+    if (err) {
+      setError(err);
+      return;
+    }
+
     submitProposal(projectId, projectTitle, clientName, bidAmount.trim(), timeline.trim(), coverMessage.trim());
     setSubmitted(true);
     onSuccess?.();
@@ -110,6 +144,20 @@ export function ProposalForm({
         AI will score your proposal against the brief
       </div>
 
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-1.5 block">
+          Your Email Address <span className="text-red-400">*</span>
+        </label>
+        <input
+          type="email"
+          value={freelancerEmail}
+          onChange={(e) => setFreelancerEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="w-full bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-warm)]/40 text-white placeholder-white/20"
+          required
+        />
+      </div>
+
       <div className={compact ? "grid grid-cols-1 gap-4" : "grid sm:grid-cols-2 gap-4"}>
         <div>
           <label className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-1.5 block">
@@ -119,7 +167,7 @@ export function ProposalForm({
             value={bidAmount}
             onChange={(e) => setBidAmount(e.target.value)}
             placeholder="e.g. $9,500"
-            className="w-full bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-warm)]/40"
+            className="w-full bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-warm)]/40 text-white"
           />
         </div>
         <div>
@@ -130,7 +178,7 @@ export function ProposalForm({
             value={timeline}
             onChange={(e) => setTimeline(e.target.value)}
             placeholder="e.g. 7 weeks"
-            className="w-full bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-warm)]/40"
+            className="w-full bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-warm)]/40 text-white"
           />
         </div>
       </div>
@@ -144,10 +192,17 @@ export function ProposalForm({
           onChange={(e) => setCoverMessage(e.target.value)}
           rows={compact ? 4 : 6}
           placeholder="Why you're the right fit, relevant experience, and how you'd approach this project..."
-          className="w-full bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-warm)]/40 resize-none leading-relaxed"
+          className="w-full bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-warm)]/40 resize-none leading-relaxed text-white"
         />
         <p className="text-[10px] text-[var(--color-muted)] mt-1">{coverMessage.length} / 40 min characters</p>
       </div>
+
+      <ProposalAttachmentPicker
+        image={proposalImage}
+        resume={proposalResume}
+        onImageChange={setProposalImage}
+        onResumeChange={setProposalResume}
+      />
 
       {error && <p className="text-sm text-red-400/90">{error}</p>}
 
