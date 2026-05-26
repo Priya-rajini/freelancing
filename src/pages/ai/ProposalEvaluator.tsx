@@ -65,23 +65,8 @@ export function ProposalEvaluator() {
     );
   }
 
-  if (!evaluation) {
-    return (
-      <div className="pt-28 pb-24 min-h-screen">
-        <div className="mx-auto max-w-[640px] px-4 md:px-8">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] mb-8"
-          >
-            <ArrowLeft size={16} /> Back to dashboard
-          </Link>
-          <p className="text-[var(--color-muted)]">
-            This candidate or project is no longer available. Post a project or refresh your talent pool.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const overall = latest?.score ?? 88;
+  const scores = useMemo(() => buildScores(overall), [overall]);
 
   const { freelancer, project, match, metrics, summary } = evaluation;
   const canDecide = isClient && proposal && proposal.status === "pending";
@@ -98,12 +83,9 @@ export function ProposalEvaluator() {
 
   return (
     <div className="pt-28 pb-24 min-h-screen">
-      <div className="mx-auto max-w-[640px] px-4 md:px-8">
-        <Link
-          to="/dashboard"
-          className="inline-flex items-center gap-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] mb-8"
-        >
-          <ArrowLeft size={16} /> Back to dashboard
+      <div className="mx-auto max-w-[800px] px-4 md:px-8">
+        <Link to="/projects" className="inline-flex items-center gap-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] mb-8">
+          <ArrowLeft size={16} /> Projects
         </Link>
 
         <RevealSection>
@@ -158,9 +140,7 @@ export function ProposalEvaluator() {
                   </span>
                 ))}
               </div>
-            )}
-          </div>
-        </RevealSection>
+            </RevealSection>
 
         <RevealSection delay={0.15} className="mt-6">
           <div className="glass rounded-2xl p-6">

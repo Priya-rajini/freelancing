@@ -64,23 +64,17 @@ function formatCommentTime(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "Just now";
 
-  const diffMs = Date.now() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
+const incomingProposals = [
+  { name: "Maya Chen", score: 94, rate: "$95/hr", timeline: "6 weeks" },
+  { name: "James Okafor", score: 78, rate: "$120/hr", timeline: "5 weeks" },
+  { name: "Elena Voss", score: 72, rate: "$140/hr", timeline: "8 weeks" },
+];
 
 export function ProjectDetail() {
   const { id } = useParams();
   const { projects, addComment, submitProposal } = useProjects();
   const { getTalentById, myTalentId } = useTalent();
   const { user } = useUser();
-  const project = projects.find((p) => p.id === id);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [commentInput, setCommentInput] = useState("");
   const [proposalMessage, setProposalMessage] = useState("");
@@ -146,21 +140,46 @@ export function ProjectDetail() {
     );
   }
 
+  const project = projects.find((p) => p.id === id) ?? projects[0];
+  const isClient =
+    user.role === "client" || (user.role === "both" && user.activeRoleView === "client");
+
   return (
     <div className="pt-24 pb-20 min-h-screen">
       <div className="mx-auto max-w-[900px] px-4 md:px-8">
         <Link
-          to="/projects"
+          to={isClient ? "/dashboard" : "/projects"}
           className="inline-flex items-center gap-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] mb-6"
         >
-          <ArrowLeft size={16} /> All projects
+          <ArrowLeft size={16} /> Back
         </Link>
 
         <RevealSection>
-          <p className="text-[var(--color-muted)] text-sm capitalize">
-            {project.status} · {project.projectType === "Fixed" ? "Fixed budget" : "Hourly"}
-          </p>
-          <h1 className="text-display text-3xl md:text-4xl font-medium mt-2">{project.title}</h1>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div>
+              <p className="text-[var(--color-muted)] text-sm">{project.client} · {project.status}</p>
+              <h1 className="text-display text-3xl md:text-4xl font-medium mt-2">{project.title}</h1>
+            </div>
+            {isClient && (
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl glass border border-[var(--color-border-strong)] text-sm hover:border-[var(--color-warm)]/30 transition-colors shrink-0 self-start"
+              >
+                <Users size={16} />
+                View proposals ({incomingProposals.length})
+              </button>
+            )}
+            {!isClient && user.role !== "client" && (
+              <Link
+                to="/dashboard"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm bg-[var(--color-warm)]/15 text-[var(--color-warm)] border border-[var(--color-warm)]/25 shrink-0 self-start"
+              >
+                <FileText size={16} />
+                Manage in workspace
+              </Link>
+            )}
+          </div>
         </RevealSection>
 
         <article className="mt-12 prose-custom">
@@ -278,10 +297,20 @@ export function ProjectDetail() {
 
           <RevealSection delay={0.25} className="mt-16">
             <h2 className="text-lg font-medium mb-6">Discussion</h2>
-            <div className="space-y-4 min-h-[80px]">
-              {comments.length === 0 ? (
-                <div className="glass rounded-xl p-6 text-sm text-[var(--color-muted)]">
-                  No comments yet. Start the conversation with your freelancer.
+            <p className="text-sm text-[var(--color-muted)] mb-4">
+              {isClient
+                ? "Thread with your hired freelancer."
+                : "Reply in Dashboard → Messages for full contract chat."}
+            </p>
+            <div className="space-y-4">
+              {[
+                { author: "Alex (Vault)", text: "Love the direction on the transfer flow. Can we explore a denser data table variant?", time: "Yesterday" },
+                { author: "Maya Chen", text: "Absolutely — I'll add a compact view toggle in the next iteration.", time: "5h ago" },
+              ].map((c) => (
+                <div key={c.time} className="glass rounded-xl p-4">
+                  <p className="text-sm font-medium">{c.author}</p>
+                  <p className="text-[var(--color-muted)] mt-2 text-sm leading-relaxed">{c.text}</p>
+                  <p className="text-[11px] text-[var(--color-muted)] mt-2">{c.time}</p>
                 </div>
               ) : (
                 comments.map((c) => (
@@ -298,36 +327,13 @@ export function ProjectDetail() {
               )}
               <div ref={commentsEndRef} />
             </div>
-            <form
-              className="mt-4 flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitComment();
-              }}
-            >
-              <input
-                value={commentInput}
-                onChange={(e) => setCommentInput(e.target.value)}
-                placeholder="Add a comment..."
-                className="flex-1 bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-warm)]/40 text-white placeholder:text-white/30"
-              />
-              <button
-                type="submit"
-                disabled={!commentInput.trim()}
-                className="px-4 rounded-xl bg-[var(--color-warm)] text-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
-                aria-label="Post comment"
+            {!isClient && (
+              <Link
+                to="/dashboard?section=messages"
+                className="inline-block mt-4 text-sm text-[var(--color-warm)] hover:underline"
               >
-                <Send size={18} />
-              </button>
-            </form>
-            {!user.isRegistered && (
-              <p className="text-[11px] text-[var(--color-muted)] mt-2">
-                Comments are saved to this project.{" "}
-                <Link to="/dashboard" className="text-[var(--color-warm)] hover:underline">
-                  Sign in from the dashboard
-                </Link>{" "}
-                to use your name.
-              </p>
+                Open Messages in workspace →
+              </Link>
             )}
           </RevealSection>
         </article>
@@ -364,7 +370,7 @@ export function ProjectDetail() {
             >
               <div className="p-6 border-b border-[var(--color-border)] flex justify-between items-center">
                 <h3 className="font-medium">Proposals</h3>
-                <button onClick={() => setDrawerOpen(false)}>
+                <button type="button" onClick={() => setDrawerOpen(false)} aria-label="Close">
                   <X size={20} />
                 </button>
               </div>

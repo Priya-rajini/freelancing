@@ -3,18 +3,53 @@ import { computeProfileCompleteness, type ProfileCompletenessResult } from "../u
 
 export type UserRole = "freelancer" | "client" | "both" | null;
 export type RoleView = "freelancer" | "client";
+export type AvailabilityStatus = "available" | "unavailable" | "open";
 export type VerificationStatus = "unverified" | "verifying" | "verified";
 export type VerificationMethod = "student_id" | "linkedin" | null;
+
+export interface EducationEntry {
+  id: string;
+  school: string;
+  degree: string;
+  field: string;
+  startYear: string;
+  endYear: string;
+}
+
+export interface ExperienceEntry {
+  id: string;
+  company: string;
+  role: string;
+  startYear: string;
+  endYear: string;
+  desc: string;
+}
 
 export interface PortfolioItem {
   id: number;
   title: string;
+  description: string;
   category: string;
+  techUsed: string[];
   image: string;
+  link: string;
+  size?: string;
   metrics: {
     views: string;
     conversion: string;
   };
+}
+
+export interface Proposal {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  clientName: string;
+  bidAmount: string;
+  timeline: string;
+  coverMessage: string;
+  status: "pending" | "accepted" | "declined";
+  score: number;
 }
 
 export interface UserProfile {
@@ -119,7 +154,16 @@ interface UserContextType {
   updateBio: (bio: string) => void;
   addSkill: (skill: string) => void;
   removeSkill: (skill: string) => void;
+  updateProfileDetails: (rate: string, availability: AvailabilityStatus) => void;
+  addEducationEntry: (school: string, degree: string, field: string, startYear: string, endYear: string) => void;
+  removeEducationEntry: (id: string) => void;
+  addExperienceEntry: (company: string, role: string, startYear: string, endYear: string, desc: string) => void;
+  removeExperienceEntry: (id: string) => void;
+  addDetailedPortfolioItem: (title: string, description: string, category: string, techUsed: string[], image: string, link: string) => void;
   addPortfolioItem: (title: string, category: string, image: string) => void;
+  removePortfolioItem: (id: number) => void;
+  submitProposal: (projectId: string, projectTitle: string, clientName: string, bidAmount: string, timeline: string, coverMessage: string) => void;
+  addVerifiedBadge: (badge: string) => void;
   startVerification: (method: VerificationMethod, value: string) => Promise<void>;
   resetVerification: () => void;
   updateProfileFields: (fields: Partial<UserProfile>) => void;
@@ -149,7 +193,33 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         console.error("Failed to parse saved user profile", e);
       }
     }
-    return makeInitialProfile();
+    return {
+      name: "",
+      avatar: "",
+      color: "#e8a87c",
+      role: null,
+      activeRoleView: "freelancer",
+      bio: "",
+      location: "",
+      skills: ["Figma"],
+      verified: [],
+      portfolioItems: [],
+      verification: {
+        status: "unverified",
+        method: null,
+        value: null,
+      },
+      isRegistered: false,
+      hourlyRate: "$95/hr",
+      availability: "available",
+      education: [],
+      experience: [],
+      proposals: [],
+      contracts: defaultContracts as ActiveContract[],
+      earnings: defaultEarnings,
+      withdrawals: defaultWithdrawals as Withdrawal[],
+      clientReviews: defaultClientReviews,
+    };
   });
 
   useEffect(() => {
@@ -158,16 +228,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  useEffect(() => {
-    if (!user.isRegistered || !user.email) return;
-    const accounts = loadAccounts();
-    const email = normalizeEmail(user.email);
-    const idx = accounts.findIndex((a) => normalizeEmail(a.email) === email);
-    if (idx >= 0) {
-      accounts[idx] = { ...accounts[idx], profile: user };
-      saveAccounts(accounts);
-    }
-  }, [user]);
+  const signup = (name: string, location: string, color: string) => {
+    const initials = name
+      .trim()
+      .split(/\s+/)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
 
   const signup = (
     name: string,
@@ -196,38 +264,37 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       avatar: initialsFromName(name) || "U",
       isRegistered: true,
       role: null,
-    };
-
-    const accounts = loadAccounts();
-    accounts.push({ email: normalizedEmail, password, profile });
-    saveAccounts(accounts);
-    setUser(profile);
-    return null;
-  };
-
-  const login = (email: string, password: string): string | null => {
-    const normalizedEmail = normalizeEmail(email);
-    if (!normalizedEmail) {
-      return "Please enter your email.";
-    }
-    if (!password) {
-      return "Please enter your password.";
-    }
-
-    const account = loadAccounts().find((a) => normalizeEmail(a.email) === normalizedEmail);
-    if (!account) {
-      return "No account found with this email. Create an account first.";
-    }
-    if (account.password !== password) {
-      return "Incorrect password. Please try again.";
-    }
-
-    setUser({ ...account.profile, email: normalizedEmail, isRegistered: true });
-    return null;
+    }));
   };
 
   const logout = () => {
-    setUser(makeInitialProfile());
+    setUser({
+      name: "",
+      avatar: "",
+      color: "#e8a87c",
+      role: null,
+      activeRoleView: "freelancer",
+      bio: "",
+      location: "",
+      skills: ["Figma"],
+      verified: [],
+      portfolioItems: [],
+      verification: {
+        status: "unverified",
+        method: null,
+        value: null,
+      },
+      isRegistered: false,
+      hourlyRate: "$95/hr",
+      availability: "available",
+      education: [],
+      experience: [],
+      proposals: [],
+      contracts: defaultContracts as ActiveContract[],
+      earnings: defaultEarnings,
+      withdrawals: defaultWithdrawals as Withdrawal[],
+      clientReviews: defaultClientReviews,
+    });
     localStorage.removeItem("skillsync_user_profile");
   };
 
@@ -260,21 +327,134 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
+  const updateProfileDetails = (hourlyRate: string, availability: AvailabilityStatus) => {
+    setUser((prev) => ({
+      ...prev,
+      hourlyRate,
+      availability,
+    }));
+  };
+
+  const addEducationEntry = (school: string, degree: string, field: string, startYear: string, endYear: string) => {
+    const entry: EducationEntry = {
+      id: Date.now().toString(),
+      school,
+      degree,
+      field,
+      startYear,
+      endYear,
+    };
+    setUser((prev) => ({
+      ...prev,
+      education: [...prev.education, entry],
+    }));
+  };
+
+  const removeEducationEntry = (id: string) => {
+    setUser((prev) => ({
+      ...prev,
+      education: prev.education.filter((edu) => edu.id !== id),
+    }));
+  };
+
+  const addExperienceEntry = (company: string, role: string, startYear: string, endYear: string, desc: string) => {
+    const entry: ExperienceEntry = {
+      id: Date.now().toString(),
+      company,
+      role,
+      startYear,
+      endYear,
+      desc,
+    };
+    setUser((prev) => ({
+      ...prev,
+      experience: [...prev.experience, entry],
+    }));
+  };
+
+  const removeExperienceEntry = (id: string) => {
+    setUser((prev) => ({
+      ...prev,
+      experience: prev.experience.filter((exp) => exp.id !== id),
+    }));
+  };
+
+  const addDetailedPortfolioItem = (
+    title: string,
+    description: string,
+    category: string,
+    techUsed: string[],
+    image: string,
+    link: string
+  ) => {
+    const item: PortfolioItem = {
+      id: Date.now(),
+      title,
+      description,
+      category,
+      techUsed,
+      image: image || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&q=80",
+      link: link || "#",
+      metrics: {
+        views: (Math.floor(Math.random() * 80) + 10) + "k",
+        conversion: "+" + (Math.floor(Math.random() * 30) + 10) + "%",
+      },
+    };
+    setUser((prev) => ({
+      ...prev,
+      portfolioItems: [...prev.portfolioItems, item],
+    }));
+  };
+
+  const removePortfolioItem = (id: number) => {
+    setUser((prev) => ({
+      ...prev,
+      portfolioItems: prev.portfolioItems.filter((item) => item.id !== id),
+    }));
+  };
+
   const addPortfolioItem = (title: string, category: string, image: string) => {
+    addDetailedPortfolioItem(
+      title,
+      "Simulated work project demonstrating technical excellence.",
+      category,
+      ["Figma", "Design Systems"],
+      image,
+      "#"
+    );
+  };
+
+  const submitProposal = (
+    projectId: string,
+    projectTitle: string,
+    clientName: string,
+    bidAmount: string,
+    timeline: string,
+    coverMessage: string
+  ) => {
+    const proposal: Proposal = {
+      id: Date.now().toString(),
+      projectId,
+      projectTitle,
+      clientName,
+      bidAmount,
+      timeline,
+      coverMessage,
+      status: "pending",
+      score: Math.floor(Math.random() * 20) + 80, // Dynamic AI matching score
+    };
+    setUser((prev) => ({
+      ...prev,
+      proposals: [...prev.proposals, proposal],
+    }));
+  };
+
+  const addVerifiedBadge = (badgeName: string) => {
     setUser((prev) => {
-      const newItem: PortfolioItem = {
-        id: Date.now(),
-        title,
-        category,
-        image: image || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&q=80",
-        metrics: {
-          views: "0",
-          conversion: "+0%",
-        },
-      };
+      if (prev.verified.includes(badgeName)) return prev;
       return {
         ...prev,
-        portfolioItems: [...prev.portfolioItems, newItem],
+        verified: [...prev.verified, badgeName],
       };
     });
   };
@@ -323,8 +503,23 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
-  const updateProfileFields = (fields: Partial<UserProfile>) => {
-    setUser((prev) => ({ ...prev, ...fields }));
+  const updateDeliverableStatus = (
+    contractId: string,
+    deliverableId: string,
+    status: DeliverableStatus
+  ) => {
+    setUser((prev) => ({
+      ...prev,
+      contracts: prev.contracts.map((c) => {
+        if (c.id !== contractId) return c;
+        const deliverables = c.deliverables.map((d) =>
+          d.id === deliverableId ? { ...d, status } : d
+        );
+        const done = deliverables.filter((d) => d.status === "approved").length;
+        const progress = Math.round((done / deliverables.length) * 100);
+        return { ...c, deliverables, progress };
+      }),
+    }));
   };
 
   const baseCompleteness = useMemo(() => computeProfileCompleteness(user), [user]);
@@ -360,10 +555,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         updateBio,
         addSkill,
         removeSkill,
+        updateProfileDetails,
+        addEducationEntry,
+        removeEducationEntry,
+        addExperienceEntry,
+        removeExperienceEntry,
+        addDetailedPortfolioItem,
         addPortfolioItem,
+        removePortfolioItem,
+        submitProposal,
+        addVerifiedBadge,
         startVerification,
         resetVerification,
-        updateProfileFields,
+        updateDeliverableStatus,
+        uploadContractFile,
+        sendContractMessage,
+        requestWithdrawal,
         completeness,
         isVerified,
       }}
