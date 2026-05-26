@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { RevealSection } from "../../components/ui/RevealSection";
-import { Link } from "react-router-dom";
+import { MatchMetricBars } from "../../components/ui/MatchMetricBars";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useUser } from "../../context/UserContext";
 

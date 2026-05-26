@@ -1,6 +1,6 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Menu, X, ShieldCheck, LogOut } from "lucide-react";
+import { Menu, X, ShieldCheck, LogOut, Plus } from "lucide-react";
 import { useState } from "react";
 import { MagneticButton } from "../ui/MagneticButton";
 import { useUser } from "../../context/UserContext";
@@ -16,8 +16,15 @@ const links = [
 
 export function Navbar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const { user, setActiveRoleView, logout } = useUser();
+
+  const handleLogout = () => {
+    logout();
+    setOpen(false);
+    navigate("/dashboard?auth=login");
+  };
 
   return (
     <>
@@ -64,6 +71,13 @@ export function Navbar() {
             
             {user.isRegistered ? (
               <div className="flex items-center gap-3 pl-3 border-l border-white/10">
+                <Link
+                  to="/post-project"
+                  className="px-3 py-1.5 rounded-lg text-black hover:opacity-95 font-semibold text-[11px] transition-all flex items-center gap-1 shadow-sm shrink-0 mr-1"
+                  style={{ backgroundColor: user.color }}
+                >
+                  <Plus size={11} /> Post Job
+                </Link>
                 {user.role === "both" && (
                   <div className="flex bg-white/5 rounded-lg p-0.5 border border-white/5">
                     <button
@@ -115,17 +129,26 @@ export function Navbar() {
                 </Link>
 
                 <button
-                  onClick={logout}
-                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-[var(--color-muted)] hover:text-red-400 transition-colors shrink-0"
-                  title="Log Out"
+                  onClick={handleLogout}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[var(--color-muted)] hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 transition-colors shrink-0 text-[12px] font-medium"
                 >
                   <LogOut size={14} />
+                  Log out
                 </button>
               </div>
             ) : (
-              <MagneticButton to="/dashboard" variant="primary" className="!px-4 !py-2 text-[13px]">
-                Get Started
-              </MagneticButton>
+              <>
+                <MagneticButton
+                  to="/dashboard?auth=login"
+                  variant="ghost"
+                  className="!px-4 !py-2 text-[13px]"
+                >
+                  Log in
+                </MagneticButton>
+                <MagneticButton to="/dashboard" variant="primary" className="!px-4 !py-2 text-[13px]">
+                  Sign up
+                </MagneticButton>
+              </>
             )}
           </div>
 
@@ -145,16 +168,43 @@ export function Navbar() {
           animate={{ opacity: 1, y: 0 }}
           className="fixed inset-0 z-40 lg:hidden pt-20 px-4"
         >
-          <div className="glass-strong rounded-2xl p-6 space-y-2" onClick={() => setOpen(false)}>
+          <div className="glass-strong rounded-2xl p-6 space-y-2">
             {links.map((link) => (
               <Link
                 key={link.to}
                 to={link.to}
-                className="block py-3 px-4 text-lg border-b border-[var(--color-border)] last:border-0"
+                onClick={() => setOpen(false)}
+                className="block py-3 px-4 text-lg border-b border-[var(--color-border)]"
               >
                 {link.label}
               </Link>
             ))}
+            {user.isRegistered ? (
+              <button
+                onClick={handleLogout}
+                className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium text-red-400 border border-red-500/20 rounded-xl hover:bg-red-500/10 transition-colors"
+              >
+                <LogOut size={16} />
+                Log out
+              </button>
+            ) : (
+              <div className="flex gap-2 mt-4 pt-2">
+                <Link
+                  to="/dashboard?auth=login"
+                  onClick={() => setOpen(false)}
+                  className="flex-1 text-center py-3 rounded-xl border border-white/10 text-sm"
+                >
+                  Log in
+                </Link>
+                <Link
+                  to="/dashboard"
+                  onClick={() => setOpen(false)}
+                  className="flex-1 text-center py-3 rounded-xl bg-[var(--color-warm)] text-black text-sm font-semibold"
+                >
+                  Sign up
+                </Link>
+              </div>
+            )}
           </div>
         </motion.div>
       )}

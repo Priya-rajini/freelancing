@@ -118,6 +118,7 @@ export interface Proposal {
 }
 
 export interface UserProfile {
+  email: string;
   name: string;
   avatar: string;
   color: string;
@@ -153,7 +154,14 @@ export interface UserProfile {
 
 interface UserContextType {
   user: UserProfile;
-  signup: (name: string, location: string, color: string) => void;
+  signup: (
+    name: string,
+    location: string,
+    color: string,
+    email: string,
+    password: string
+  ) => string | null;
+  login: (email: string, password: string) => string | null;
   logout: () => void;
   setRole: (role: UserRole) => void;
   setActiveRoleView: (view: RoleView) => void;
@@ -187,6 +195,8 @@ interface UserContextType {
       educationAdded: boolean;
       experienceAdded: boolean;
       portfolioAdded: boolean;
+      clientPrefsAdded: boolean;
+      freelancerPrefsAdded: boolean;
     };
   };
 }
@@ -245,7 +255,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    localStorage.setItem("skillsync_user_profile", JSON.stringify(user));
+    if (user.isRegistered) {
+      localStorage.setItem("skillsync_user_profile", JSON.stringify(user));
+    }
   }, [user]);
 
   const signup = (name: string, location: string, color: string) => {
@@ -257,12 +269,31 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       .toUpperCase()
       .slice(0, 2);
 
-    setUser((prev) => ({
-      ...prev,
+  const signup = (
+    name: string,
+    location: string,
+    color: string,
+    email: string,
+    password: string
+  ): string | null => {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return "Please enter a valid email address.";
+    }
+    if (password.length < 6) {
+      return "Password must be at least 6 characters.";
+    }
+    if (loadAccounts().some((a) => normalizeEmail(a.email) === normalizedEmail)) {
+      return "An account with this email already exists. Try logging in.";
+    }
+
+    const profile: UserProfile = {
+      ...makeInitialProfile(),
+      email: normalizedEmail,
       name,
       location,
       color,
-      avatar: initials || "U",
+      avatar: initialsFromName(name) || "U",
       isRegistered: true,
       role: null,
     }));
@@ -613,6 +644,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         signup,
+        login,
         logout,
         setRole,
         setActiveRoleView,

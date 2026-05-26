@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, type UserRole } from "../context/UserContext";
 import { CompletenessWidget } from "../components/ui/CompletenessWidget";
@@ -71,6 +71,29 @@ export function Dashboard() {
       : "overview";
   const [freelancerSection, setFreelancerSection] = useState<FreelancerSection>(initialSection);
   const [aiInput, setAiInput] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  // Auto-select the first project when projects load or change
+  useEffect(() => {
+    if (clientProjects.length > 0) {
+      setSelectedProjectId((prev) => {
+        if (!prev) return clientProjects[0].id;
+        const exists = clientProjects.some((p) => p.id === prev);
+        return exists ? prev : clientProjects[0].id;
+      });
+    } else {
+      setSelectedProjectId(null);
+    }
+  }, [clientProjects]);
+
+  const selectedProject = useMemo(() => {
+    return clientProjects.find((p) => p.id === selectedProjectId) || null;
+  }, [clientProjects, selectedProjectId]);
+
+  const matches = useMemo(() => {
+    if (!selectedProject) return [];
+    return computeMatches(talentPool, selectedProject, myTalentId ?? undefined).slice(0, 5);
+  }, [selectedProject, talentPool, myTalentId]);
   const [messages, setMessages] = useState(() => [
     {
       role: "ai",
@@ -81,8 +104,13 @@ export function Dashboard() {
   // Signup fields
   const [signupName, setSignupName] = useState("");
   const [signupLocation, setSignupLocation] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
   const [signupColor, setSignupColor] = useState("#e8a87c");
-  const [signupError, setSignupError] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [authError, setAuthError] = useState("");
 
   const sendAi = () => {
     if (!aiInput.trim()) return;
@@ -99,16 +127,47 @@ export function Dashboard() {
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    setSignupError("");
+    setAuthError("");
     if (!signupName.trim()) {
-      setSignupError("Please enter your full name.");
+      setAuthError("Please enter your full name.");
       return;
     }
     if (!signupLocation.trim()) {
-      setSignupError("Please enter your location.");
+      setAuthError("Please enter your location.");
       return;
     }
-    signup(signupName.trim(), signupLocation.trim(), signupColor);
+    if (!signupEmail.trim()) {
+      setAuthError("Please enter your email.");
+      return;
+    }
+    if (signupPassword.length < 6) {
+      setAuthError("Password must be at least 6 characters.");
+      return;
+    }
+    if (signupPassword !== signupConfirmPassword) {
+      setAuthError("Passwords do not match.");
+      return;
+    }
+    const err = signup(
+      signupName.trim(),
+      signupLocation.trim(),
+      signupColor,
+      signupEmail.trim(),
+      signupPassword
+    );
+    if (err) setAuthError(err);
+  };
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    const err = login(loginEmail.trim(), loginPassword);
+    if (err) setAuthError(err);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/dashboard?auth=login");
   };
 
   const handleRoleSelect = (selectedRole: UserRole) => {
@@ -123,9 +182,11 @@ export function Dashboard() {
   };
 
   // -------------------------------------------------------------
-  // STATE A: NOT REGISTERED (SIGN UP FLOW)
+  // STATE A: NOT REGISTERED (SIGN UP / LOGIN)
   // -------------------------------------------------------------
   if (!user.isRegistered) {
+    const accentColor = authMode === "login" ? "#7dd3fc" : signupColor;
+
     return (
       <div className="pt-28 pb-20 min-h-screen flex items-center justify-center px-4">
         <div className="max-w-md w-full">
@@ -134,99 +195,254 @@ export function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="glass-strong rounded-2xl p-6 md:p-8 border border-white/10 shadow-2xl relative overflow-hidden"
           >
-            {/* Ambient Background Glows */}
             <div
               className="absolute -top-24 -right-24 h-48 w-48 rounded-full blur-[80px] opacity-20 transition-colors duration-500"
-              style={{ backgroundColor: signupColor }}
+              style={{ backgroundColor: accentColor }}
             />
 
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-5">
               <div
                 className="h-10 w-10 rounded-lg flex items-center justify-center transition-colors duration-300"
-                style={{ backgroundColor: `${signupColor}22`, border: `1px solid ${signupColor}44`, color: signupColor }}
+                style={{
+                  backgroundColor: `${accentColor}22`,
+                  border: `1px solid ${accentColor}44`,
+                  color: accentColor,
+                }}
               >
-                <UserPlus size={20} />
+                {authMode === "login" ? <LogIn size={20} /> : <UserPlus size={20} />}
               </div>
               <div>
-                <h1 className="text-display text-2xl font-semibold text-white">Create Account</h1>
-                <p className="text-[var(--color-muted)] text-xs">Set up your SkillSync credentials</p>
+                <h1 className="text-display text-2xl font-semibold text-white">
+                  {authMode === "login" ? "Welcome back" : "Create Account"}
+                </h1>
+                <p className="text-[var(--color-muted)] text-xs">
+                  {authMode === "login"
+                    ? "Log in to your SkillSync workspace"
+                    : "Set up your SkillSync credentials"}
+                </p>
               </div>
             </div>
 
-            <form onSubmit={handleRegister} className="space-y-5">
-              {/* Name */}
-              <div>
-                <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={signupName}
-                  onChange={(e) => setSignupName(e.target.value)}
-                  placeholder="e.g. Sarah Jenkins"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
-                />
-              </div>
+            <div className="flex p-1 rounded-xl bg-white/5 border border-white/10 mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("signup");
+                  setAuthError("");
+                }}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                  authMode === "signup" ? "bg-white/10 text-white" : "text-[var(--color-muted)]"
+                }`}
+              >
+                Sign up
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthError("");
+                }}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                  authMode === "login" ? "bg-white/10 text-white" : "text-[var(--color-muted)]"
+                }`}
+              >
+                Log in
+              </button>
+            </div>
 
-              {/* Location */}
-              <div>
-                <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
-                  Location / City
-                </label>
-                <div className="relative">
-                  <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+            {authMode === "login" ? (
+              <form onSubmit={handleLogin} className="space-y-5">
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="email"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="you@email.com"
+                      autoComplete="email"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="password"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="Your password"
+                      autoComplete="current-password"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
+                </div>
+                {authError && (
+                  <div className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 p-3 rounded-lg flex items-center gap-2">
+                    <span className="shrink-0">•</span>
+                    <span>{authError}</span>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl text-black font-semibold text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2 mt-2"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  <LogIn size={16} /> Log in
+                </button>
+                <p className="text-center text-xs text-[var(--color-muted)]">
+                  New here?{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("signup");
+                      setAuthError("");
+                    }}
+                    className="text-[var(--color-warm)] hover:underline"
+                  >
+                    Create an account
+                  </button>
+                </p>
+              </form>
+            ) : (
+              <form onSubmit={handleRegister} className="space-y-5">
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Full Name
+                  </label>
                   <input
                     type="text"
-                    value={signupLocation}
-                    onChange={(e) => setSignupLocation(e.target.value)}
-                    placeholder="e.g. San Francisco, CA"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    value={signupName}
+                    onChange={(e) => setSignupName(e.target.value)}
+                    placeholder="e.g. Sarah Jenkins"
+                    autoComplete="name"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
                   />
                 </div>
-              </div>
-
-              {/* Color Swatch */}
-              <div>
-                <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 flex items-center gap-1.5 font-mono">
-                  <Palette size={13} /> Profile Theme Color
-                </label>
-                <div className="flex items-center gap-3 py-1">
-                  {colorPalettes.map((pal) => (
-                    <button
-                      key={pal.value}
-                      type="button"
-                      onClick={() => setSignupColor(pal.value)}
-                      title={pal.name}
-                      className={`h-7 w-7 rounded-full transition-all border-2 relative flex items-center justify-center`}
-                      style={{
-                        backgroundColor: pal.value,
-                        borderColor: signupColor === pal.value ? "white" : "transparent",
-                        transform: signupColor === pal.value ? "scale(1.1)" : "scale(1)",
-                      }}
-                    >
-                      {signupColor === pal.value && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-black" />
-                      )}
-                    </button>
-                  ))}
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="email"
+                      value={signupEmail}
+                      onChange={(e) => setSignupEmail(e.target.value)}
+                      placeholder="you@email.com"
+                      autoComplete="email"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
                 </div>
-              </div>
-
-              {signupError && (
-                <div className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 p-3 rounded-lg flex items-center gap-2">
-                  <span className="shrink-0">•</span>
-                  <span>{signupError}</span>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Location / City
+                  </label>
+                  <div className="relative">
+                    <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="text"
+                      value={signupLocation}
+                      onChange={(e) => setSignupLocation(e.target.value)}
+                      placeholder="e.g. San Francisco, CA"
+                      autoComplete="address-level2"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
                 </div>
-              )}
-
-              <button
-                type="submit"
-                className="w-full py-3 rounded-xl bg-[var(--color-warm)] text-black font-semibold text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2 mt-4"
-                style={{ backgroundColor: signupColor }}
-              >
-                Get Started
-              </button>
-            </form>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="password"
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      placeholder="At least 6 characters"
+                      autoComplete="new-password"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 font-mono">
+                    Confirm Password
+                  </label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                    <input
+                      type="password"
+                      value={signupConfirmPassword}
+                      onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                      placeholder="Repeat password"
+                      autoComplete="new-password"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--color-warm)]/40 transition-colors"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-[var(--color-muted)] mb-2 flex items-center gap-1.5 font-mono">
+                    <Palette size={13} /> Profile Theme Color
+                  </label>
+                  <div className="flex items-center gap-3 py-1">
+                    {colorPalettes.map((pal) => (
+                      <button
+                        key={pal.value}
+                        type="button"
+                        onClick={() => setSignupColor(pal.value)}
+                        title={pal.name}
+                        className="h-7 w-7 rounded-full transition-all border-2 relative flex items-center justify-center"
+                        style={{
+                          backgroundColor: pal.value,
+                          borderColor: signupColor === pal.value ? "white" : "transparent",
+                          transform: signupColor === pal.value ? "scale(1.1)" : "scale(1)",
+                        }}
+                      >
+                        {signupColor === pal.value && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-black" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {authError && (
+                  <div className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 p-3 rounded-lg flex items-center gap-2">
+                    <span className="shrink-0">•</span>
+                    <span>{authError}</span>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl text-black font-semibold text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2 mt-2"
+                  style={{ backgroundColor: signupColor }}
+                >
+                  Get Started
+                </button>
+                <p className="text-center text-xs text-[var(--color-muted)]">
+                  Already have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("login");
+                      setAuthError("");
+                    }}
+                    className="text-[var(--color-warm)] hover:underline"
+                  >
+                    Log in
+                  </button>
+                </p>
+              </form>
+            )}
           </motion.div>
         </div>
       </div>
@@ -329,6 +545,15 @@ export function Dashboard() {
               </div>
             </motion.div>
           </div>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-10 inline-flex items-center gap-2 text-xs text-[var(--color-muted)] hover:text-red-400 transition-colors"
+          >
+            <LogOut size={14} />
+            Log out and use a different account
+          </button>
         </div>
       </div>
     );
@@ -433,7 +658,7 @@ export function Dashboard() {
               </>
             ) : (
               <>
-                <span>2 active job postings · 12 applications received</span>
+                <span>{clientProjects.length} active job postings · {clientProjects.reduce((acc, p) => acc + p.proposalsCount, 0)} applications received</span>
                 {user.verification.status === "verified" && (
                   <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-mint)] font-mono">
                     <ShieldCheck size={11} /> VERIFIED HIRER
@@ -480,49 +705,76 @@ export function Dashboard() {
                     <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
                       Active Job Postings
                     </p>
-                    <button
+                    <Link
+                      to="/post-project"
                       className="text-[11px] font-semibold flex items-center gap-1 hover:underline text-[var(--color-mint)]"
                       style={{ color: user.color }}
                     >
                       <Plus size={12} /> Post a Job
-                    </button>
+                    </Link>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all">
-                      <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-[var(--color-mint)]/10 text-[var(--color-mint)]">
-                        MATCHING ACTIVE
-                      </span>
-                      <h3 className="font-medium mt-3 text-white">AI Product Designer</h3>
-                      <p className="text-xs text-[var(--color-muted)] mt-1">
-                        Budget: $10,000 · Location: Remote
-                      </p>
-                      <div className="flex justify-between items-center mt-6 text-[11px] text-[var(--color-muted)] pt-3 border-t border-white/5">
-                        <span>6 Candidates matched</span>
-                        <Link
-                          to="/ai/smart-match"
-                          className="text-[var(--color-warm)] hover:underline flex items-center gap-0.5"
-                          style={{ color: user.color }}
-                        >
-                          Evaluate Match <ChevronRight size={10} />
-                        </Link>
-                      </div>
+                  {clientProjects.length === 0 ? (
+                    <div className="glass rounded-xl p-8 text-center border border-white/5 bg-white/[0.005]">
+                      <p className="text-sm text-[var(--color-muted)] mb-4">No projects yet. Post your first project</p>
+                      <Link
+                        to="/post-project"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-black hover:opacity-90 transition-opacity"
+                        style={{ backgroundColor: user.color }}
+                      >
+                        <Plus size={12} /> Post a Job
+                      </Link>
                     </div>
-
-                    <div className="glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all">
-                      <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-white/5 text-[var(--color-muted)]">
-                        DRAFT STAGE
-                      </span>
-                      <h3 className="font-medium mt-3 text-white">Full-stack React Engineer</h3>
-                      <p className="text-xs text-[var(--color-muted)] mt-1">
-                        Budget: $85/hr · Duration: 3 months
-                      </p>
-                      <div className="flex justify-between items-center mt-6 text-[11px] text-[var(--color-muted)] pt-3 border-t border-white/5">
-                        <span>Post is inactive</span>
-                        <button className="text-white hover:underline">Publish Now</button>
-                      </div>
+                  ) : (
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {clientProjects.map((proj) => {
+                        const isSelected = proj.id === selectedProjectId;
+                        return (
+                          <div
+                            key={proj.id}
+                            onClick={() => setSelectedProjectId(proj.id)}
+                            className="glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all flex flex-col justify-between cursor-pointer border"
+                            style={{
+                              borderColor: isSelected ? user.color : "rgba(255, 255, 255, 0.05)",
+                              boxShadow: isSelected ? `0 0 15px ${user.color}25` : "none"
+                            }}
+                          >
+                            <div>
+                              <span 
+                                className="text-[9px] font-mono px-2 py-0.5 rounded"
+                                style={{
+                                  backgroundColor: `${user.color}15`,
+                                  color: user.color,
+                                  border: `1px solid ${user.color}25`
+                                }}
+                              >
+                                {proj.projectType === "Fixed" ? "FIXED BUDGET" : "HOURLY RATE"}
+                              </span>
+                              <h3 className="font-medium mt-3 text-white line-clamp-1">{proj.title}</h3>
+                              <p className="text-xs text-[var(--color-muted)] mt-1.5 line-clamp-2">
+                                {proj.description}
+                              </p>
+                            </div>
+                            
+                            <div className="mt-5 pt-3 border-t border-white/5 flex flex-col gap-2">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="text-[var(--color-muted)]">Budget</span>
+                                <span className="font-semibold text-white">
+                                  {proj.projectType === "Fixed" ? `$${proj.budget.toLocaleString()}` : `$${proj.budget}/hr`}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-[11px] text-[var(--color-muted)]">
+                                <span>{proj.proposalsCount} proposals</span>
+                                <span className="capitalize px-1.5 py-0.5 rounded bg-white/5 text-[10px]">
+                                  {proj.status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Candidate Matches */}
@@ -532,63 +784,79 @@ export function Dashboard() {
                     <Sparkles size={16} className="text-[var(--color-warm)]" style={{ color: user.color }} />
                   </div>
                   <div className="space-y-3">
-                    {[
-                      { name: "James Okafor", role: "Full-stack Engineer", match: 91, skills: ["React", "Node"], color: "#6ee7b7" },
-                      { name: "Elena Voss", role: "ML Engineer", match: 88, skills: ["PyTorch", "LLMs"], color: "#7dd3fc" },
-                    ].map((candidate) => (
-                      <div
-                        key={candidate.name}
-                        className="p-3.5 rounded-lg border border-white/5 hover:border-white/10 bg-white/[0.005] flex items-center justify-between transition-all"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold font-mono"
-                            style={{ background: `${candidate.color}22`, color: candidate.color }}
-                          >
-                            {candidate.name.split(" ").map(n => n[0]).join("")}
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold text-white">{candidate.name}</div>
-                            <div className="text-[10px] text-[var(--color-muted)] mt-0.5">
-                              {candidate.role} · {candidate.skills.join(", ")}
+                    {!selectedProject ? (
+                      <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)] flex flex-col items-center gap-3">
+                        <span>Post a project to see matches</span>
+                        <Link
+                          to="/post-project"
+                          className="px-4 py-2 rounded-xl text-xs font-semibold text-black hover:opacity-90 transition-opacity"
+                          style={{ backgroundColor: user.color }}
+                        >
+                          Post a Job
+                        </Link>
+                      </div>
+                    ) : talentPool.length === 0 ? (
+                      <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)]">
+                        No freelancers on SkillSync yet. When freelancers complete their profiles, matches appear here in real time.
+                      </div>
+                    ) : matches.length === 0 ? (
+                      <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)]">
+                        No strong matches for this project yet. Add or adjust required skills on your posting.
+                      </div>
+                    ) : (
+                      matches.map((candidate) => (
+                        <div
+                          key={candidate.id}
+                          className="p-3.5 rounded-lg border border-white/5 hover:border-white/10 bg-white/[0.005] flex items-center justify-between transition-all"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold font-mono"
+                              style={{ background: `${candidate.color}22`, color: candidate.color }}
+                            >
+                              {candidate.avatar || candidate.name.split(" ").map((n: string) => n[0]).join("")}
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-white">{candidate.name}</div>
+                              <div className="text-[10px] text-[var(--color-muted)] mt-0.5">
+                                {candidate.headline} · {candidate.skills.slice(0, 3).join(", ")}{candidate.skills.length > 3 && "..."}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="text-right">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--color-mint)]/10 text-[var(--color-mint)] text-[10px] font-mono border border-[var(--color-mint)]/10">
-                            {candidate.match}% Match
-                          </span>
-                          <div
-                            className="text-[10px] mt-1 hover:underline cursor-pointer text-[var(--color-warm)]"
-                            style={{ color: user.color }}
-                          >
-                            Evaluate Proposal
+                          <div className="text-right flex flex-col items-end">
+                            {candidate.matchScore < 40 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-950/20 text-red-400 text-[10px] font-mono border border-red-900/30">
+                                Low match (below 40%)
+                              </span>
+                            ) : (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border"
+                                style={{
+                                  backgroundColor: `${user.color}10`,
+                                  borderColor: `${user.color}25`,
+                                  color: user.color
+                                }}
+                              >
+                                AI Match: {candidate.matchScore}%
+                              </span>
+                            )}
+                            <Link
+                              to={`/ai/proposal-evaluator?freelancerId=${candidate.id}&projectId=${selectedProject.id}`}
+                              className="text-[10px] mt-1.5 hover:underline cursor-pointer text-[var(--color-warm)]"
+                              style={{ color: user.color }}
+                            >
+                              Evaluate Proposal
+                            </Link>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
 
                 {/* Checklist Client */}
-                <div className="glass rounded-xl p-6">
-                  <h3 className="font-medium text-sm mb-4">Today's Hiring Checklist</h3>
-                  <ul className="space-y-3 text-sm text-[var(--color-muted)]">
-                    <li className="flex items-center gap-3">
-                      <input type="checkbox" className="rounded border-[var(--color-border)]" defaultChecked />
-                      <span className="line-through opacity-60">Authorize escrow deposit for Vault Finance</span>
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <input type="checkbox" className="rounded border-[var(--color-border)]" />
-                      Review James Okafor's React coding test suitability
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <input type="checkbox" className="rounded border-[var(--color-border)]" />
-                      Schedule introductory Zoom call with ML consultant Elena
-                    </li>
-                  </ul>
-                </div>
+                <TaskChecklist roleView="client" title="Today's Hiring Checklist" />
               </motion.div>
             )}
           </AnimatePresence>
