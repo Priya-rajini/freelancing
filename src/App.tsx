@@ -9,6 +9,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Profile } from "./pages/Profile";
 import { Portfolio } from "./pages/Portfolio";
 import { ProjectDetail } from "./pages/ProjectDetail";
+import { OpenProjectDetail } from "./pages/OpenProjectDetail";
 import { SmartMatch } from "./pages/ai/SmartMatch";
 import { ProposalEvaluator } from "./pages/ai/ProposalEvaluator";
 import { SkillVerification } from "./pages/ai/SkillVerification";
@@ -22,6 +23,7 @@ export default function App() {
           <Route index element={<Landing />} />
           <Route path="talent" element={<Talent />} />
           <Route path="projects" element={<Projects />} />
+          <Route path="projects/open/:id" element={<OpenProjectDetail />} />
           <Route path="projects/:id" element={<ProjectDetail />} />
           <Route path="community" element={<Community />} />
           <Route path="mentorship" element={<Mentorship />} />
