@@ -13,6 +13,7 @@ import { OpenProjectDetail } from "./pages/OpenProjectDetail";
 import { SmartMatch } from "./pages/ai/SmartMatch";
 import { ProposalEvaluator } from "./pages/ai/ProposalEvaluator";
 import { SkillVerification } from "./pages/ai/SkillVerification";
+import { PostProject } from "./pages/PostProject";
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="ai/smart-match" element={<SmartMatch />} />
           <Route path="ai/proposal-evaluator" element={<ProposalEvaluator />} />
           <Route path="ai/skill-verification" element={<SkillVerification />} />
+          <Route path="post-project" element={<PostProject />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { Link, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useParams } from "react-router-dom";
 import { milestones, projects } from "../data/mockData";
@@ -16,6 +17,38 @@ export function ProjectDetail() {
   const { id } = useParams();
   const { user } = useUser();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [commentInput, setCommentInput] = useState("");
+  const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  const comments = project?.comments ?? [];
+  const proposals = project?.proposals ?? [];
+  const authorName = user.isRegistered && user.name.trim() ? user.name.trim() : "You";
+
+  useEffect(() => {
+    commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [comments.length]);
+
+  const submitComment = () => {
+    if (!project || !commentInput.trim()) return;
+    addComment(project.id, authorName, commentInput);
+    setCommentInput("");
+  };
+
+  if (!project) {
+    return (
+      <div className="pt-28 pb-24 min-h-screen">
+        <div className="mx-auto max-w-[900px] px-4 md:px-8">
+          <Link
+            to="/projects"
+            className="inline-flex items-center gap-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]"
+          >
+            <ArrowLeft size={16} /> All projects
+          </Link>
+          <p className="mt-8 text-[var(--color-muted)]">Project not found.</p>
+        </div>
+      </div>
+    );
+  }
 
   const project = projects.find((p) => p.id === id) ?? projects[0];
   const isClient =
@@ -62,56 +95,42 @@ export function ProjectDetail() {
         <article className="mt-12 prose-custom">
           <RevealSection delay={0.1}>
             <h2 className="text-lg font-medium mb-4">Overview</h2>
-            <p className="text-[var(--color-muted)] leading-[1.8] text-[17px]">
-              We're rebuilding our core banking dashboard for 40k daily active users.
-              The goal is clarity — reduce cognitive load on transaction flows while
-              maintaining the premium feel our brand demands. Think Stripe meets
-              private banking.
-            </p>
+            <p className="text-[var(--color-muted)] leading-[1.8] text-[17px]">{project.description}</p>
           </RevealSection>
 
           <RevealSection delay={0.15} className="mt-12">
-            <h2 className="text-lg font-medium mb-4">Scope</h2>
+            <h2 className="text-lg font-medium mb-4">Details</h2>
             <ul className="space-y-3 text-[var(--color-muted)] text-[17px] leading-relaxed">
-              <li className="flex gap-3"><span className="text-[var(--color-warm)]">→</span> 12 core screens (dashboard, transfers, analytics)</li>
-              <li className="flex gap-3"><span className="text-[var(--color-warm)]">→</span> Design system tokens & component library</li>
-              <li className="flex gap-3"><span className="text-[var(--color-warm)]">→</span> Interactive Figma prototype with dev handoff</li>
+              <li className="flex gap-3">
+                <span className="text-[var(--color-warm)]">→</span>
+                Budget: {formatBudget(project)}
+              </li>
+              <li className="flex gap-3">
+                <span className="text-[var(--color-warm)]">→</span>
+                Deadline: {formatDeadline(project.deadline)}
+              </li>
+              <li className="flex gap-3">
+                <span className="text-[var(--color-warm)]">→</span>
+                {project.proposalsCount} proposal{project.proposalsCount === 1 ? "" : "s"} received
+              </li>
             </ul>
           </RevealSection>
 
-          <RevealSection delay={0.2} className="mt-16">
-            <h2 className="text-lg font-medium mb-8">Milestones</h2>
-            <div className="relative">
-              {milestones.map((m, i) => (
-                <div key={m.id} className="flex gap-6 pb-12 last:pb-0">
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={`h-3 w-3 rounded-full shrink-0 ${
-                        m.status === "done"
-                          ? "bg-[var(--color-mint)]"
-                          : m.status === "active"
-                          ? "bg-[var(--color-warm)] ring-4 ring-[var(--color-warm)]/20"
-                          : "bg-white/10"
-                      }`}
-                    />
-                    {i < milestones.length - 1 && (
-                      <div className="w-px flex-1 bg-[var(--color-border)] mt-2 min-h-[60px]" />
-                    )}
-                  </div>
-                  <div className="flex-1 -mt-1">
-                    <div className="flex flex-wrap items-baseline gap-3">
-                      <h3 className="font-medium">{m.title}</h3>
-                      <span className="text-[11px] text-[var(--color-muted)]">{m.date}</span>
-                      {m.status === "active" && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-warm)]/15 text-[var(--color-warm)]">In progress</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-[var(--color-muted)] mt-1">{m.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </RevealSection>
+          {project.requiredSkills.length > 0 && (
+            <RevealSection delay={0.2} className="mt-12">
+              <h2 className="text-lg font-medium mb-4">Required skills</h2>
+              <div className="flex flex-wrap gap-2">
+                {project.requiredSkills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="text-sm px-3 py-1 rounded-full bg-white/5 text-[var(--color-muted)]"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </RevealSection>
+          )}
 
           <RevealSection delay={0.25} className="mt-16">
             <h2 className="text-lg font-medium mb-6">Discussion</h2>
@@ -130,7 +149,20 @@ export function ProjectDetail() {
                   <p className="text-[var(--color-muted)] mt-2 text-sm leading-relaxed">{c.text}</p>
                   <p className="text-[11px] text-[var(--color-muted)] mt-2">{c.time}</p>
                 </div>
-              ))}
+              ) : (
+                comments.map((c) => (
+                  <div key={c.id} className="glass rounded-xl p-4">
+                    <p className="text-sm font-medium">{c.author}</p>
+                    <p className="text-[var(--color-muted)] mt-2 text-sm leading-relaxed whitespace-pre-wrap">
+                      {c.text}
+                    </p>
+                    <p className="text-[11px] text-[var(--color-muted)] mt-2">
+                      {formatCommentTime(c.createdAt)}
+                    </p>
+                  </div>
+                ))
+              )}
+              <div ref={commentsEndRef} />
             </div>
             {!isClient && (
               <Link

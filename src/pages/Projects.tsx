@@ -7,6 +7,30 @@ import { Plus, Briefcase, Send, Clock } from "lucide-react";
 
 type Tab = "open" | "active" | "submitted";
 
+function formatBudget(project: Project) {
+  return project.projectType === "Fixed"
+    ? `$${project.budget.toLocaleString()}`
+    : `$${project.budget}/hr`;
+}
+
+function formatDeadline(deadline: string) {
+  try {
+    return new Date(deadline).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return deadline;
+  }
+}
+
+function statusProgress(status: Project["status"]) {
+  if (status === "Completed") return 100;
+  if (status === "Active") return 55;
+  return 20;
+}
+
 export function Projects() {
   const { user } = useUser();
   const [tab, setTab] = useState<Tab>("open");
