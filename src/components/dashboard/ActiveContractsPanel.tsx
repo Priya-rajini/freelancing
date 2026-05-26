@@ -11,18 +11,15 @@ import {
   Send,
   ChevronDown,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 
 const statusOptions: { value: DeliverableStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
-  { value: "in_progress", label: "In progress" },
   { value: "submitted", label: "Submitted" },
   { value: "approved", label: "Approved" },
 ];
 
 const statusColors: Record<DeliverableStatus, string> = {
   pending: "text-[var(--color-muted)]",
-  in_progress: "text-[var(--color-warm)]",
   submitted: "text-[var(--color-sky)]",
   approved: "text-[var(--color-mint)]",
 };
@@ -76,9 +73,9 @@ export function ActiveContractsPanel() {
               className="w-full p-5 flex items-start justify-between gap-4 text-left hover:bg-white/[0.02] transition-colors"
             >
               <div>
-                <h3 className="font-medium">{contract.title}</h3>
+                <h3 className="font-medium">{contract.projectTitle}</h3>
                 <p className="text-sm text-[var(--color-muted)] mt-0.5">
-                  {contract.client} · {contract.clientContact}
+                  {contract.clientName}
                 </p>
               </div>
               <div className="flex items-center gap-3 shrink-0">
@@ -99,7 +96,7 @@ export function ActiveContractsPanel() {
                 />
               </div>
               <p className="text-[10px] text-[var(--color-muted)] mt-1.5 flex items-center gap-1">
-                <Clock size={10} /> Due {contract.due} · {contract.progress}% complete
+                <Clock size={10} /> Due {contract.dueDate} · {contract.progress}% complete
               </p>
             </div>
 
@@ -130,7 +127,6 @@ export function ActiveContractsPanel() {
                                 <Circle size={16} className="text-[var(--color-muted)] shrink-0" />
                               )}
                               <span className="text-sm truncate">{d.title}</span>
-                              <span className="text-[10px] text-[var(--color-muted)] shrink-0">Due {d.dueDate}</span>
                             </div>
                             <select
                               value={d.status}
@@ -206,7 +202,7 @@ export function ActiveContractsPanel() {
                             }`}
                           >
                             <p className="text-[10px] opacity-60 mb-1">
-                              {m.from === "client" ? contract.clientContact : "You"} · {m.time}
+                              {m.from === "client" ? contract.clientName : "You"} · {m.time}
                             </p>
                             {m.text}
                           </div>
@@ -219,7 +215,7 @@ export function ActiveContractsPanel() {
                             setMessageDraft((d) => ({ ...d, [contract.id]: e.target.value }))
                           }
                           onKeyDown={(e) => e.key === "Enter" && sendMessage(contract.id)}
-                          placeholder={`Message ${contract.clientContact}…`}
+                          placeholder={`Message ${contract.clientName}…`}
                           className="flex-1 bg-white/5 border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[var(--color-warm)]/40"
                         />
                         <button
@@ -232,12 +228,12 @@ export function ActiveContractsPanel() {
                       </div>
                     </div>
 
-                    <Link
-                      to={`/projects/${contract.projectId}`}
-                      className="inline-block text-xs text-[var(--color-muted)] hover:text-[var(--color-warm)]"
+                    <button
+                      type="button"
+                      className="text-xs text-[var(--color-muted)] hover:text-[var(--color-warm)]"
                     >
-                      Open full project doc →
-                    </Link>
+                      Contract details →
+                    </button>
                   </div>
                 </motion.div>
               )}

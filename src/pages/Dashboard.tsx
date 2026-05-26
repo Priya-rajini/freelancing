@@ -13,29 +13,28 @@ import {
 } from "../utils/workspaceAssistant";
 import {
   LayoutGrid,
-  FileSignature,
   MessageSquare,
   Settings,
   Send,
   Sparkles,
   ChevronRight,
-  Briefcase,
   Users,
-  Globe,
   Plus,
   ShieldCheck,
   UserPlus,
   MapPin,
   Palette,
+  LogIn,
+  Mail,
+  Lock,
+  LogOut,
+  FolderKanban,
+  Briefcase,
+  Globe,
   Wallet,
   Star,
 } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
-import {
-  FreelancerSidebar,
-  type FreelancerSection,
-  type NavItem,
-} from "../components/dashboard/FreelancerSidebar";
+import { Link, useNavigate } from "react-router-dom";
 import { FreelancerOverviewPanel } from "../components/dashboard/FreelancerOverviewPanel";
 import { ActiveContractsPanel } from "../components/dashboard/ActiveContractsPanel";
 import { EarningsPanel } from "../components/dashboard/EarningsPanel";
@@ -43,14 +42,8 @@ import { ReviewsPanel } from "../components/dashboard/ReviewsPanel";
 import { MessagesPanel } from "../components/dashboard/MessagesPanel";
 import { SettingsPanel } from "../components/dashboard/SettingsPanel";
 
-const freelancerNav: NavItem[] = [
-  { id: "overview", icon: LayoutGrid, label: "Overview" },
-  { id: "contracts", icon: FileSignature, label: "Contracts" },
-  { id: "earnings", icon: Wallet, label: "Earnings" },
-  { id: "reviews", icon: Star, label: "Reviews" },
-  { id: "messages", icon: MessageSquare, label: "Messages" },
-  { id: "settings", icon: Settings, label: "Settings" },
-];
+type FreelancerSection = "overview" | "contracts" | "earnings" | "reviews" | "messages" | "settings";
+
 
 const sectionTitles: Record<FreelancerSection, string> = {
   overview: "Overview",
@@ -71,14 +64,11 @@ const colorPalettes = [
 
 export function Dashboard() {
   const { user, signup, login, logout, setRole, setActiveRoleView, completeness } = useUser();
+  const { projects: clientProjects } = useProjects();
+  const { talentPool, myTalentId } = useTalent();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const sectionParam = searchParams.get("section");
-  const initialSection: FreelancerSection =
-    sectionParam && freelancerNav.some((n) => n.id === sectionParam)
-      ? (sectionParam as FreelancerSection)
-      : "overview";
-  const [freelancerSection, setFreelancerSection] = useState<FreelancerSection>(initialSection);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [activeSection, setActiveSection] = useState<string>("overview");
   const [aiInput, setAiInput] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
@@ -232,6 +222,11 @@ export function Dashboard() {
     setAuthError("");
     const err = login(loginEmail.trim(), loginPassword);
     if (err) setAuthError(err);
+  };
+
+  const handleRoleViewChange = (view: "freelancer" | "client") => {
+    setActiveRoleView(view);
+    setActiveSection("overview");
   };
 
   const handleLogout = () => {
@@ -633,6 +628,25 @@ export function Dashboard() {
   // -------------------------------------------------------------
   const isFreelancerView = user.activeRoleView === "freelancer";
 
+  const freelancerNavItems = [
+    { id: "overview", icon: LayoutGrid, label: "Overview" },
+    { id: "contracts", icon: FolderKanban, label: "Active contracts", count: user.contracts.length },
+    { id: "earnings", icon: Wallet, label: "Earnings tracker" },
+    { id: "reviews", icon: Star, label: "Client reviews", count: user.clientReviews.length },
+    { id: "messages", icon: MessageSquare, label: "Messages" },
+    { id: "settings", icon: Settings, label: "Settings" },
+  ];
+
+  const clientNavItems = [
+    { id: "overview", icon: LayoutGrid, label: "Overview" },
+    { id: "messages", icon: MessageSquare, label: "Messages" },
+    { id: "settings", icon: Settings, label: "Settings" },
+  ];
+
+  const activeNavItems: { id: string; icon: any; label: string; count?: number }[] = isFreelancerView
+    ? freelancerNavItems
+    : clientNavItems;
+
   return (
     <div className="pt-20 min-h-screen flex flex-col lg:flex-row bg-[var(--color-void)] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
       {/* Sidebar Nav */}
@@ -640,28 +654,33 @@ export function Dashboard() {
         <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] px-3 mb-4 font-mono">
           {isFreelancerView ? "Freelancer Space" : "Client Portal"}
         </p>
-        {navItems.map((item) => (
-          <button
-            key={item.label}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm mb-1 transition-colors ${
-              item.active
-                ? "bg-white/[0.06] text-[var(--color-text)]"
-                : "text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/[0.03]"
-            }`}
-          >
-            <item.icon size={18} />
-            {item.label}
-          </button>
-        ))}
+        {activeNavItems.map((item) => {
+          const isActive = activeSection === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveSection(item.id)}
+              className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm mb-1 transition-all w-full text-left ${
+                isActive
+                  ? "bg-white/[0.06] text-white font-medium border-l-2 border-[var(--color-warm)] pl-2.5"
+                  : "text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/[0.03]"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <item.icon size={18} style={isActive ? { color: "var(--color-warm)" } : {}} />
+                <span>{item.label}</span>
+              </div>
+              {item.count !== undefined && item.count > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white font-mono shrink-0">
+                  {item.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
 
         <div className="mt-auto pt-6 border-t border-white/5 space-y-2">
-          <Link
-            to="/settings"
-            className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/5 text-xs text-[var(--color-muted)] hover:text-white transition-all hover:bg-white/[0.04]"
-          >
-            <span className="font-semibold">Profile Settings</span>
-            <ChevronRight size={14} />
-          </Link>
           <Link
             to="/portfolio"
             className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/5 text-xs text-[var(--color-muted)] hover:text-white transition-all hover:bg-white/[0.04]"
@@ -671,13 +690,14 @@ export function Dashboard() {
           </Link>
           <button
             type="button"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm mb-1 bg-white/[0.06] text-[var(--color-text)]"
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 p-2.5 rounded-lg border border-red-500/20 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
           >
-            <LayoutGrid size={18} />
-            Overview
+            <LogOut size={14} />
+            <span className="font-semibold">Log out</span>
           </button>
-        </aside>
-      )}
+        </div>
+      </aside>
 
       {/* Main Dashboard Space */}
       <div className="flex-1 p-4 md:p-8 overflow-auto">
@@ -694,7 +714,7 @@ export function Dashboard() {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setActiveRoleView("freelancer")}
+                  onClick={() => handleRoleViewChange("freelancer")}
                   className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
                     isFreelancerView
                       ? "border-[var(--color-warm)] bg-[var(--color-warm)]/10 text-[var(--color-warm)]"
@@ -709,7 +729,7 @@ export function Dashboard() {
                   Freelance View
                 </button>
                 <button
-                  onClick={() => setActiveRoleView("client")}
+                  onClick={() => handleRoleViewChange("client")}
                   className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
                     !isFreelancerView
                       ? "border-[var(--color-warm)] bg-[var(--color-warm)]/10 text-[var(--color-warm)]"
@@ -730,13 +750,15 @@ export function Dashboard() {
           {/* Heading */}
           <h1 className="text-display text-2xl md:text-3xl font-medium">
             {isFreelancerView
-              ? freelancerSection === "overview"
+              ? activeSection === "overview"
                 ? `Good evening, ${user.name.split(" ")[0]}`
-                : sectionTitles[freelancerSection]
-              : `Good evening, ${user.name.split(" ")[0]}`}
+                : sectionTitles[activeSection as FreelancerSection] || "Overview"
+              : activeSection === "overview"
+                ? `Good evening, ${user.name.split(" ")[0]}`
+                : activeSection.charAt(0).toUpperCase() + activeSection.slice(1)}
           </h1>
           <p className="text-[var(--color-muted)] mt-1.5 text-sm flex items-center gap-2">
-            {isFreelancerView && freelancerSection === "overview" ? (
+            {isFreelancerView && activeSection === "overview" ? (
               <>
                 <span>
                   {myApplications.length} proposal{myApplications.length === 1 ? "" : "s"} sent
@@ -763,253 +785,220 @@ export function Dashboard() {
           </p>
 
           <AnimatePresence mode="wait">
-            {/* VIEW A: FREELANCER VIEWPORT */}
             {isFreelancerView ? (
               <motion.div
-                key={freelancerSection}
+                key={activeSection}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 className="mt-10"
               >
-                <div className="space-y-4">
-                  <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
-                    My proposals
-                  </p>
-                  {myApplications.length === 0 ? (
-                    <div className="glass rounded-xl p-8 text-center border border-white/5 bg-white/[0.005]">
-                      <p className="text-sm text-[var(--color-muted)]">
-                        No proposals sent yet. Browse open projects and submit a proposal to get hired.
-                      </p>
-                      <Link
-                        to="/projects"
-                        className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-xl text-xs font-semibold text-black hover:opacity-90 transition-opacity"
-                        style={{ backgroundColor: user.color }}
-                      >
-                        Browse projects
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {myApplications.map(({ project: proj, proposal }) => (
-                        <Link
-                          key={proposal.id}
-                          to={`/projects/${proj.id}`}
-                          className="block glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all border border-white/5"
-                        >
-                          <div className="flex justify-between items-start gap-3">
-                            <h3 className="font-medium text-sm text-white line-clamp-1">{proj.title}</h3>
-                            <span
-                              className={`text-[10px] px-2 py-0.5 rounded-full shrink-0 capitalize ${
-                                proposal.status === "approved"
-                                  ? "bg-[var(--color-mint)]/10 text-[var(--color-mint)]"
-                                  : proposal.status === "denied"
-                                    ? "bg-red-500/10 text-red-400"
-                                    : "bg-white/5 text-[var(--color-muted)]"
-                              }`}
-                            >
-                              {proposal.status}
-                            </span>
-                          </div>
-                          <p className="text-xs text-[var(--color-muted)] mt-2 line-clamp-2">
-                            {proposal.coverMessage}
-                          </p>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <TaskChecklist roleView="freelancer" title="Today's focus" />
+                {activeSection === "overview" && (
+                  <FreelancerOverviewPanel
+                    skillBadges={user.verified}
+                    onNavigate={(sec) => setActiveSection(sec)}
+                  />
+                )}
+                {activeSection === "contracts" && <ActiveContractsPanel />}
+                {activeSection === "earnings" && <EarningsPanel />}
+                {activeSection === "reviews" && <ReviewsPanel />}
+                {activeSection === "messages" && <MessagesPanel />}
+                {activeSection === "settings" && <SettingsPanel />}
               </motion.div>
             ) : (
               // VIEW B: CLIENT VIEWPORT
               <motion.div
-                key="client-dashboard"
+                key={activeSection}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="mt-10 space-y-8"
+                className="mt-10"
               >
-                {/* Active Postings */}
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
-                      Active Job Postings
-                    </p>
-                    <Link
-                      to="/post-project"
-                      className="text-[11px] font-semibold flex items-center gap-1 hover:underline text-[var(--color-mint)]"
-                      style={{ color: user.color }}
-                    >
-                      <Plus size={12} /> Post a Job
-                    </Link>
-                  </div>
-
-                  {clientProjects.length === 0 ? (
-                    <div className="glass rounded-xl p-8 text-center border border-white/5 bg-white/[0.005]">
-                      <p className="text-sm text-[var(--color-muted)] mb-4">No projects yet. Post your first project</p>
-                      <Link
-                        to="/post-project"
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-black hover:opacity-90 transition-opacity"
-                        style={{ backgroundColor: user.color }}
-                      >
-                        <Plus size={12} /> Post a Job
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {clientProjects.map((proj) => {
-                        const isSelected = proj.id === selectedProjectId;
-                        return (
-                          <div
-                            key={proj.id}
-                            onClick={() => setSelectedProjectId(proj.id)}
-                            className="glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all flex flex-col justify-between cursor-pointer border"
-                            style={{
-                              borderColor: isSelected ? user.color : "rgba(255, 255, 255, 0.05)",
-                              boxShadow: isSelected ? `0 0 15px ${user.color}25` : "none"
-                            }}
-                          >
-                            <div>
-                              <span 
-                                className="text-[9px] font-mono px-2 py-0.5 rounded"
-                                style={{
-                                  backgroundColor: `${user.color}15`,
-                                  color: user.color,
-                                  border: `1px solid ${user.color}25`
-                                }}
-                              >
-                                {proj.projectType === "Fixed" ? "FIXED BUDGET" : "HOURLY RATE"}
-                              </span>
-                              <h3 className="font-medium mt-3 text-white line-clamp-1">{proj.title}</h3>
-                              <p className="text-xs text-[var(--color-muted)] mt-1.5 line-clamp-2">
-                                {proj.description}
-                              </p>
-                            </div>
-                            
-                            <div className="mt-5 pt-3 border-t border-white/5 flex flex-col gap-2">
-                              <div className="flex justify-between items-center text-xs">
-                                <span className="text-[var(--color-muted)]">Budget</span>
-                                <span className="font-semibold text-white">
-                                  {proj.projectType === "Fixed" ? `$${proj.budget.toLocaleString()}` : `$${proj.budget}/hr`}
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center text-[11px] text-[var(--color-muted)]">
-                                <span>{proj.proposalsCount} proposals</span>
-                                <span className="capitalize px-1.5 py-0.5 rounded bg-white/5 text-[10px]">
-                                  {proj.status}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Received Proposals */}
-                <div className="glass rounded-xl p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-medium text-sm">Received Proposals</h3>
-                    <Sparkles size={16} className="text-[var(--color-warm)]" style={{ color: user.color }} />
-                  </div>
-                  <div className="space-y-3">
-                    {!selectedProject ? (
-                      <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)] flex flex-col items-center gap-3">
-                        <span>Select a project to review applications</span>
+                {activeSection === "overview" && (
+                  <div className="space-y-8">
+                    {/* Active Postings */}
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
+                          Active Job Postings
+                        </p>
                         <Link
                           to="/post-project"
-                          className="px-4 py-2 rounded-xl text-xs font-semibold text-black hover:opacity-90 transition-opacity"
-                          style={{ backgroundColor: user.color }}
+                          className="text-[11px] font-semibold flex items-center gap-1 hover:underline text-[var(--color-mint)]"
+                          style={{ color: user.color }}
                         >
-                          Post a Job
+                          <Plus size={12} /> Post a Job
                         </Link>
                       </div>
-                    ) : receivedProposals.length === 0 ? (
-                      <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)]">
-                        No proposals yet. Freelancers can apply from the Projects page once your job is open.
-                      </div>
-                    ) : (
-                      receivedProposals.map((prop) => {
-                        const applicant = talentPool.find((t) => t.id === prop.freelancerId);
-                        return (
-                          <div
-                            key={prop.id}
-                            className="p-3.5 rounded-lg border border-white/5 hover:border-white/10 bg-white/[0.005] transition-all"
+
+                      {clientProjects.length === 0 ? (
+                        <div className="glass rounded-xl p-8 text-center border border-white/5 bg-white/[0.005]">
+                          <p className="text-sm text-[var(--color-muted)] mb-4">No projects yet. Post your first project</p>
+                          <Link
+                            to="/post-project"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-black hover:opacity-90 transition-opacity"
+                            style={{ backgroundColor: user.color }}
                           >
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div
-                                  className="h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold font-mono shrink-0"
-                                  style={{
-                                    background: `${applicant?.color ?? "#6ee7b7"}22`,
-                                    color: applicant?.color ?? "#6ee7b7",
-                                  }}
-                                >
-                                  {applicant?.avatar ??
-                                    applicant?.name
-                                      ?.split(" ")
-                                      .map((n: string) => n[0])
-                                      .join("") ??
-                                    "?"}
+                            <Plus size={12} /> Post a Job
+                          </Link>
+                        </div>
+                      ) : (
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {clientProjects.map((proj) => {
+                            const isSelected = proj.id === selectedProjectId;
+                            return (
+                              <div
+                                key={proj.id}
+                                onClick={() => setSelectedProjectId(proj.id)}
+                                className="glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all flex flex-col justify-between cursor-pointer border"
+                                style={{
+                                  borderColor: isSelected ? user.color : "rgba(255, 255, 255, 0.05)",
+                                  boxShadow: isSelected ? `0 0 15px ${user.color}25` : "none"
+                                }}
+                              >
+                                <div>
+                                  <span 
+                                    className="text-[9px] font-mono px-2 py-0.5 rounded"
+                                    style={{
+                                      backgroundColor: `${user.color}15`,
+                                      color: user.color,
+                                      border: `1px solid ${user.color}25`
+                                    }}
+                                  >
+                                    {proj.projectType === "Fixed" ? "FIXED BUDGET" : "HOURLY RATE"}
+                                  </span>
+                                  <h3 className="font-medium mt-3 text-white line-clamp-1">{proj.title}</h3>
+                                  <p className="text-xs text-[var(--color-muted)] mt-1.5 line-clamp-2">
+                                    {proj.description}
+                                  </p>
                                 </div>
-                                <div className="min-w-0">
-                                  <div className="text-xs font-semibold text-white truncate">
-                                    {applicant?.name ?? "Freelancer"}
+                                
+                                <div className="mt-5 pt-3 border-t border-white/5 flex flex-col gap-2">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="text-[var(--color-muted)]">Budget</span>
+                                    <span className="font-semibold text-white">
+                                      {proj.projectType === "Fixed" ? `$${proj.budget.toLocaleString()}` : `$${proj.budget}/hr`}
+                                    </span>
                                   </div>
-                                  <div className="text-[10px] text-[var(--color-muted)] mt-0.5 capitalize">
-                                    {prop.status} · AI match {prop.matchScore}%
+                                  <div className="flex justify-between items-center text-[11px] text-[var(--color-muted)]">
+                                    <span>{proj.proposalsCount} proposals</span>
+                                    <span className="capitalize px-1.5 py-0.5 rounded bg-white/5 text-[10px]">
+                                      {proj.status}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
-                              <Link
-                                to={`/ai/proposal-evaluator?freelancerId=${prop.freelancerId}&projectId=${selectedProject.id}`}
-                                className="text-[10px] shrink-0 hover:underline"
-                                style={{ color: user.color }}
-                              >
-                                Review & evaluate
-                              </Link>
-                            </div>
-                            <p className="text-[10px] text-[var(--color-muted)] mt-2 line-clamp-2">
-                              {prop.coverMessage}
-                            </p>
-                            {(prop.attachments?.length ?? 0) > 0 && (
-                              <p className="text-[10px] text-[var(--color-warm)] mt-1">
-                                {(prop.attachments?.length ?? 0)} attachment
-                                {(prop.attachments?.length ?? 0) === 1 ? "" : "s"} included
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-
-                {/* Talent pool preview (optional matches not yet applied) */}
-                {selectedProject && matches.length > 0 && receivedProposals.length === 0 && (
-                  <div className="glass rounded-xl p-6 space-y-4 opacity-80">
-                    <h3 className="font-medium text-sm text-[var(--color-muted)]">
-                      Suggested talent (not yet applied)
-                    </h3>
-                    <div className="space-y-2">
-                      {matches.slice(0, 3).map((candidate) => (
-                        <div
-                          key={candidate.id}
-                          className="text-[10px] text-[var(--color-muted)] flex justify-between"
-                        >
-                          <span>{candidate.name}</span>
-                          <span>{candidate.matchScore}% fit</span>
+                            );
+                          })}
                         </div>
-                      ))}
+                      )}
                     </div>
+
+                    {/* Received Proposals */}
+                    <div className="glass rounded-xl p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-medium text-sm">Received Proposals</h3>
+                        <Sparkles size={16} className="text-[var(--color-warm)]" style={{ color: user.color }} />
+                      </div>
+                      <div className="space-y-3">
+                        {!selectedProject ? (
+                          <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)] flex flex-col items-center gap-3">
+                            <span>Select a project to review applications</span>
+                            <Link
+                              to="/post-project"
+                              className="px-4 py-2 rounded-xl text-xs font-semibold text-black hover:opacity-90 transition-opacity"
+                              style={{ backgroundColor: user.color }}
+                            >
+                              Post a Job
+                            </Link>
+                          </div>
+                        ) : receivedProposals.length === 0 ? (
+                          <div className="p-8 text-center border border-dashed border-white/10 rounded-xl text-xs text-[var(--color-muted)]">
+                            No proposals yet. Freelancers can apply from the Projects page once your job is open.
+                          </div>
+                        ) : (
+                          receivedProposals.map((prop) => {
+                            const applicant = talentPool.find((t) => t.id === prop.freelancerId);
+                            return (
+                              <div
+                                key={prop.id}
+                                className="p-3.5 rounded-lg border border-white/5 hover:border-white/10 bg-white/[0.005] transition-all"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div
+                                      className="h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold font-mono shrink-0"
+                                      style={{
+                                        background: `${applicant?.color ?? "#6ee7b7"}22`,
+                                        color: applicant?.color ?? "#6ee7b7",
+                                      }}
+                                    >
+                                      {applicant?.avatar ??
+                                        applicant?.name
+                                          ?.split(" ")
+                                          .map((n: string) => n[0])
+                                          .join("") ??
+                                        "?"}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="text-xs font-semibold text-white truncate">
+                                        {applicant?.name ?? "Freelancer"}
+                                      </div>
+                                      <div className="text-[10px] text-[var(--color-muted)] mt-0.5 capitalize">
+                                        {prop.status} · AI match {prop.matchScore}%
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <Link
+                                    to={`/ai/proposal-evaluator?freelancerId=${prop.freelancerId}&projectId=${selectedProject.id}`}
+                                    className="text-[10px] shrink-0 hover:underline"
+                                    style={{ color: user.color }}
+                                  >
+                                    Review & evaluate
+                                  </Link>
+                                </div>
+                                <p className="text-[10px] text-[var(--color-muted)] mt-2 line-clamp-2">
+                                  {prop.coverMessage}
+                                </p>
+                                {(prop.attachments?.length ?? 0) > 0 && (
+                                  <p className="text-[10px] text-[var(--color-warm)] mt-1">
+                                    {(prop.attachments?.length ?? 0)} attachment
+                                    {(prop.attachments?.length ?? 0) === 1 ? "" : "s"} included
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Talent pool preview (optional matches not yet applied) */}
+                    {selectedProject && matches.length > 0 && receivedProposals.length === 0 && (
+                      <div className="glass rounded-xl p-6 space-y-4 opacity-80">
+                        <h3 className="font-medium text-sm text-[var(--color-muted)]">
+                          Suggested talent (not yet applied)
+                        </h3>
+                        <div className="space-y-2">
+                          {matches.slice(0, 3).map((candidate) => (
+                            <div
+                              key={candidate.id}
+                              className="text-[10px] text-[var(--color-muted)] flex justify-between"
+                            >
+                              <span>{candidate.name}</span>
+                              <span>{candidate.matchScore}% fit</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Checklist Client */}
+                    <TaskChecklist roleView="client" title="Today's Hiring Checklist" />
                   </div>
                 )}
-
-                {/* Checklist Client */}
-                <TaskChecklist roleView="client" title="Today's Hiring Checklist" />
+                {activeSection === "messages" && <MessagesPanel />}
+                {activeSection === "settings" && <SettingsPanel />}
               </motion.div>
             )}
           </AnimatePresence>
@@ -1092,12 +1081,21 @@ export function Dashboard() {
 
       {/* Mobile nav bar */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 glass-strong border-t border-[var(--color-border)] flex justify-around py-3 px-2 z-40 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
-        {navItems.slice(0, 4).map((item) => (
-          <button key={item.label} className="flex flex-col items-center gap-1 text-[10px] text-[var(--color-muted)]">
-            <item.icon size={20} />
-            {item.label}
-          </button>
-        ))}
+        {activeNavItems.slice(0, 5).map((item) => {
+          const isActive = activeSection === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              className={`flex flex-col items-center gap-1 text-[10px] transition-all ${
+                isActive ? "text-[var(--color-warm)] font-medium font-semibold" : "text-[var(--color-muted)] hover:text-white"
+              }`}
+            >
+              <item.icon size={20} style={isActive ? { color: "var(--color-warm)" } : {}} />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );

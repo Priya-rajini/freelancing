@@ -43,6 +43,19 @@ export function Profile() {
   const [expEnd, setExpEnd] = useState("");
   const [expDesc, setExpDesc] = useState("");
 
+  // Education form state
+  const [showEduForm, setShowEduForm] = useState(false);
+  const [eduSchool, setEduSchool] = useState("");
+  const [eduDegree, setEduDegree] = useState("");
+  const [eduField, setEduField] = useState("");
+  const [eduStart, setEduStart] = useState("");
+  const [eduEnd, setEduEnd] = useState("");
+
+  // Project details & Add project modals
+  const [selectedProject, setSelectedProject] = useState<PortfolioItem | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
+
   // Determine if this is the active user's own profile page (Maya Chen)
   const isOwnProfile = user.isRegistered && (id === "maya-chen" || id === "me" || !id);
 

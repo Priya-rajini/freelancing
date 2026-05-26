@@ -53,8 +53,8 @@ export function ReviewsPanel() {
           >
             <div className="flex flex-wrap justify-between gap-2 mb-3">
               <div>
-                <p className="font-medium">{review.client}</p>
-                <p className="text-[11px] text-[var(--color-muted)]">{review.project}</p>
+                <p className="font-medium">{review.author}</p>
+                <p className="text-[11px] text-[var(--color-muted)]">{review.company}</p>
               </div>
               <div className="text-right">
                 <div className="flex gap-0.5 justify-end">

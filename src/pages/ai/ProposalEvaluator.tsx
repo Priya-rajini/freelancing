@@ -65,8 +65,20 @@ export function ProposalEvaluator() {
     );
   }
 
-  const overall = latest?.score ?? 88;
-  const scores = useMemo(() => buildScores(overall), [overall]);
+  if (!evaluation) {
+    return (
+      <div className="pt-28 pb-24 min-h-screen">
+        <div className="mx-auto max-w-[640px] px-4 md:px-8">
+          <Link to="/dashboard" className="inline-flex items-center gap-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] mb-8">
+            <ArrowLeft size={16} /> Back to dashboard
+          </Link>
+          <p className="text-[var(--color-muted)]">
+            Unable to load proposal evaluation. Please try again.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const { freelancer, project, match, metrics, summary } = evaluation;
   const canDecide = isClient && proposal && proposal.status === "pending";
@@ -131,7 +143,7 @@ export function ProposalEvaluator() {
             </p>
             {match.matchedSkills.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4">
-                {match.matchedSkills.map((skill) => (
+                {match.matchedSkills.map((skill: string) => (
                   <span
                     key={skill}
                     className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-mint)]/10 text-[var(--color-mint)] border border-[var(--color-mint)]/20"
@@ -140,7 +152,9 @@ export function ProposalEvaluator() {
                   </span>
                 ))}
               </div>
-            </RevealSection>
+            )}
+          </div>
+        </RevealSection>
 
         <RevealSection delay={0.15} className="mt-6">
           <div className="glass rounded-2xl p-6">

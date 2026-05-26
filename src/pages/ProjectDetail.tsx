@@ -12,7 +12,7 @@ import { computeMatch } from "../utils/matching";
 import { RevealSection } from "../components/ui/RevealSection";
 import { ProposalAttachmentPicker } from "../components/ui/ProposalAttachmentPicker";
 import { ProposalAttachmentList } from "../components/ui/ProposalAttachmentList";
-import { ArrowLeft, X, FileText, Send, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { ArrowLeft, X, FileText, Send, CheckCircle2, XCircle, Clock, Users } from "lucide-react";
 
 function proposalStatusLabel(status: ProposalStatus) {
   if (status === "approved") return "Approved";
@@ -63,6 +63,20 @@ function formatDeadline(deadline: string) {
 function formatCommentTime(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "Just now";
+  
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 
 const incomingProposals = [
   { name: "Maya Chen", score: 94, rate: "$95/hr", timeline: "6 weeks" },
@@ -72,11 +86,11 @@ const incomingProposals = [
 
 export function ProjectDetail() {
   const { id } = useParams();
-  const { projects, addComment, submitProposal } = useProjects();
+  const { projects, submitProposal } = useProjects();
   const { getTalentById, myTalentId } = useTalent();
   const { user } = useUser();
+  const project = projects.find((p) => p.id === id);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [commentInput, setCommentInput] = useState("");
   const [proposalMessage, setProposalMessage] = useState("");
   const [proposalImage, setProposalImage] = useState<ProposalAttachment | null>(null);
   const [proposalResume, setProposalResume] = useState<ProposalAttachment | null>(null);
@@ -95,7 +109,7 @@ export function ProjectDetail() {
     () => (myTalentId ? proposals.find((p) => p.freelancerId === myTalentId) : undefined),
     [proposals, myTalentId]
   );
-  const authorName = user.isRegistered && user.name.trim() ? user.name.trim() : "You";
+
 
   const handleSubmitProposal = () => {
     if (!project || !myTalentId) return;
@@ -118,12 +132,6 @@ export function ProjectDetail() {
     commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [comments.length]);
 
-  const submitComment = () => {
-    if (!project || !commentInput.trim()) return;
-    addComment(project.id, authorName, commentInput);
-    setCommentInput("");
-  };
-
   if (!project) {
     return (
       <div className="pt-28 pb-24 min-h-screen">
@@ -140,9 +148,7 @@ export function ProjectDetail() {
     );
   }
 
-  const project = projects.find((p) => p.id === id) ?? projects[0];
-  const isClient =
-    user.role === "client" || (user.role === "both" && user.activeRoleView === "client");
+
 
   return (
     <div className="pt-24 pb-20 min-h-screen">
@@ -157,7 +163,7 @@ export function ProjectDetail() {
         <RevealSection>
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
-              <p className="text-[var(--color-muted)] text-sm">{project.client} · {project.status}</p>
+              <p className="text-[var(--color-muted)] text-sm">{project.status}</p>
               <h1 className="text-display text-3xl md:text-4xl font-medium mt-2">{project.title}</h1>
             </div>
             {isClient && (
@@ -303,15 +309,17 @@ export function ProjectDetail() {
                 : "Reply in Dashboard → Messages for full contract chat."}
             </p>
             <div className="space-y-4">
-              {[
-                { author: "Alex (Vault)", text: "Love the direction on the transfer flow. Can we explore a denser data table variant?", time: "Yesterday" },
-                { author: "Maya Chen", text: "Absolutely — I'll add a compact view toggle in the next iteration.", time: "5h ago" },
-              ].map((c) => (
-                <div key={c.time} className="glass rounded-xl p-4">
-                  <p className="text-sm font-medium">{c.author}</p>
-                  <p className="text-[var(--color-muted)] mt-2 text-sm leading-relaxed">{c.text}</p>
-                  <p className="text-[11px] text-[var(--color-muted)] mt-2">{c.time}</p>
-                </div>
+              {comments.length === 0 ? (
+                [
+                  { author: "Alex (Vault)", text: "Love the direction on the transfer flow. Can we explore a denser data table variant?", time: "Yesterday" },
+                  { author: "Maya Chen", text: "Absolutely — I'll add a compact view toggle in the next iteration.", time: "5h ago" },
+                ].map((c) => (
+                  <div key={c.time} className="glass rounded-xl p-4">
+                    <p className="text-sm font-medium">{c.author}</p>
+                    <p className="text-[var(--color-muted)] mt-2 text-sm leading-relaxed">{c.text}</p>
+                    <p className="text-[11px] text-[var(--color-muted)] mt-2">{c.time}</p>
+                  </div>
+                ))
               ) : (
                 comments.map((c) => (
                   <div key={c.id} className="glass rounded-xl p-4">

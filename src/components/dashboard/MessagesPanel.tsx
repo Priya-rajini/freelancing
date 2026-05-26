@@ -34,7 +34,7 @@ export function MessagesPanel() {
                 : "border-[var(--color-border)] text-[var(--color-muted)]"
             }`}
           >
-            {c.client}
+            {c.clientName}
           </button>
         ))}
       </div>
@@ -42,8 +42,8 @@ export function MessagesPanel() {
       {contract ? (
         <div className="glass rounded-xl border border-[var(--color-border)] flex flex-col min-h-[400px]">
           <div className="p-4 border-b border-[var(--color-border)]">
-            <p className="font-medium text-sm">{contract.title}</p>
-            <p className="text-[11px] text-[var(--color-muted)]">{contract.clientContact} · {contract.client}</p>
+            <p className="font-medium text-sm">{contract.projectTitle}</p>
+            <p className="text-[11px] text-[var(--color-muted)]">{contract.clientName}</p>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[320px]">
             {contract.messages.map((m) => (
