@@ -13,7 +13,7 @@ import {
 } from "../utils/workspaceAssistant";
 import {
   LayoutGrid,
-  FolderKanban,
+  FileSignature,
   MessageSquare,
   Settings,
   Send,
@@ -27,19 +27,39 @@ import {
   UserPlus,
   MapPin,
   Palette,
-  LogIn,
-  Mail,
-  Lock,
-  LogOut,
+  Wallet,
+  Star,
 } from "lucide-react";
-import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  FreelancerSidebar,
+  type FreelancerSection,
+  type NavItem,
+} from "../components/dashboard/FreelancerSidebar";
+import { FreelancerOverviewPanel } from "../components/dashboard/FreelancerOverviewPanel";
+import { ActiveContractsPanel } from "../components/dashboard/ActiveContractsPanel";
+import { EarningsPanel } from "../components/dashboard/EarningsPanel";
+import { ReviewsPanel } from "../components/dashboard/ReviewsPanel";
+import { MessagesPanel } from "../components/dashboard/MessagesPanel";
+import { SettingsPanel } from "../components/dashboard/SettingsPanel";
 
-const navItems = [
-  { icon: LayoutGrid, label: "Overview", active: true },
-  { icon: FolderKanban, label: "Projects" },
-  { icon: MessageSquare, label: "Messages" },
-  { icon: Settings, label: "Settings" },
+const freelancerNav: NavItem[] = [
+  { id: "overview", icon: LayoutGrid, label: "Overview" },
+  { id: "contracts", icon: FileSignature, label: "Contracts" },
+  { id: "earnings", icon: Wallet, label: "Earnings" },
+  { id: "reviews", icon: Star, label: "Reviews" },
+  { id: "messages", icon: MessageSquare, label: "Messages" },
+  { id: "settings", icon: Settings, label: "Settings" },
 ];
+
+const sectionTitles: Record<FreelancerSection, string> = {
+  overview: "Overview",
+  contracts: "Active contracts",
+  earnings: "Earnings",
+  reviews: "Reviews",
+  messages: "Messages",
+  settings: "Settings",
+};
 
 const colorPalettes = [
   { value: "#e8a87c", name: "Warm Amber" },
@@ -53,15 +73,12 @@ export function Dashboard() {
   const { user, signup, login, logout, setRole, setActiveRoleView, completeness } = useUser();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [authMode, setAuthMode] = useState<"signup" | "login">(
-    searchParams.get("auth") === "login" ? "login" : "signup"
-  );
-
-  useEffect(() => {
-    setAuthMode(searchParams.get("auth") === "login" ? "login" : "signup");
-  }, [searchParams]);
-  const { projects: clientProjects } = useProjects();
-  const { talentPool, myTalentId } = useTalent();
+  const sectionParam = searchParams.get("section");
+  const initialSection: FreelancerSection =
+    sectionParam && freelancerNav.some((n) => n.id === sectionParam)
+      ? (sectionParam as FreelancerSection)
+      : "overview";
+  const [freelancerSection, setFreelancerSection] = useState<FreelancerSection>(initialSection);
   const [aiInput, setAiInput] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
@@ -654,14 +671,13 @@ export function Dashboard() {
           </Link>
           <button
             type="button"
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 p-2.5 rounded-lg border border-red-500/20 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm mb-1 bg-white/[0.06] text-[var(--color-text)]"
           >
-            <LogOut size={14} />
-            <span className="font-semibold">Log out</span>
+            <LayoutGrid size={18} />
+            Overview
           </button>
-        </div>
-      </aside>
+        </aside>
+      )}
 
       {/* Main Dashboard Space */}
       <div className="flex-1 p-4 md:p-8 overflow-auto">
@@ -712,21 +728,15 @@ export function Dashboard() {
           )}
 
           {/* Heading */}
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <h1 className="text-display text-2xl md:text-3xl font-medium">
-              Good evening, {user.name.split(" ")[0]}
-            </h1>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="lg:hidden flex items-center gap-2 px-3 py-2 rounded-xl border border-red-500/25 text-xs text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
-            >
-              <LogOut size={14} />
-              Log out
-            </button>
-          </div>
+          <h1 className="text-display text-2xl md:text-3xl font-medium">
+            {isFreelancerView
+              ? freelancerSection === "overview"
+                ? `Good evening, ${user.name.split(" ")[0]}`
+                : sectionTitles[freelancerSection]
+              : `Good evening, ${user.name.split(" ")[0]}`}
+          </h1>
           <p className="text-[var(--color-muted)] mt-1.5 text-sm flex items-center gap-2">
-            {isFreelancerView ? (
+            {isFreelancerView && freelancerSection === "overview" ? (
               <>
                 <span>
                   {myApplications.length} proposal{myApplications.length === 1 ? "" : "s"} sent
@@ -756,11 +766,11 @@ export function Dashboard() {
             {/* VIEW A: FREELANCER VIEWPORT */}
             {isFreelancerView ? (
               <motion.div
-                key="freelancer-dashboard"
+                key={freelancerSection}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="mt-10 space-y-8"
+                className="mt-10"
               >
                 <div className="space-y-4">
                   <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
