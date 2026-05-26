@@ -2,20 +2,14 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, type UserRole } from "../context/UserContext";
 import { CompletenessWidget } from "../components/ui/CompletenessWidget";
-import { TaskChecklist } from "../components/ui/TaskChecklist";
-import { projects } from "../data/mockData";
-import { useProjects } from "../context/ProjectContext";
-import { useTalent } from "../context/TalentContext";
-import { computeMatches } from "../utils/matching";
 import {
   LayoutGrid,
-  FolderKanban,
+  FileSignature,
   MessageSquare,
   Settings,
   Send,
   Sparkles,
   ChevronRight,
-  Clock,
   Briefcase,
   Users,
   Globe,
@@ -24,19 +18,39 @@ import {
   UserPlus,
   MapPin,
   Palette,
-  LogIn,
-  Mail,
-  Lock,
-  LogOut,
+  Wallet,
+  Star,
 } from "lucide-react";
-import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  FreelancerSidebar,
+  type FreelancerSection,
+  type NavItem,
+} from "../components/dashboard/FreelancerSidebar";
+import { FreelancerOverviewPanel } from "../components/dashboard/FreelancerOverviewPanel";
+import { ActiveContractsPanel } from "../components/dashboard/ActiveContractsPanel";
+import { EarningsPanel } from "../components/dashboard/EarningsPanel";
+import { ReviewsPanel } from "../components/dashboard/ReviewsPanel";
+import { MessagesPanel } from "../components/dashboard/MessagesPanel";
+import { SettingsPanel } from "../components/dashboard/SettingsPanel";
 
-const navItems = [
-  { icon: LayoutGrid, label: "Overview", active: true },
-  { icon: FolderKanban, label: "Projects" },
-  { icon: MessageSquare, label: "Messages" },
-  { icon: Settings, label: "Settings" },
+const freelancerNav: NavItem[] = [
+  { id: "overview", icon: LayoutGrid, label: "Overview" },
+  { id: "contracts", icon: FileSignature, label: "Contracts" },
+  { id: "earnings", icon: Wallet, label: "Earnings" },
+  { id: "reviews", icon: Star, label: "Reviews" },
+  { id: "messages", icon: MessageSquare, label: "Messages" },
+  { id: "settings", icon: Settings, label: "Settings" },
 ];
+
+const sectionTitles: Record<FreelancerSection, string> = {
+  overview: "Overview",
+  contracts: "Active contracts",
+  earnings: "Earnings",
+  reviews: "Reviews",
+  messages: "Messages",
+  settings: "Settings",
+};
 
 const colorPalettes = [
   { value: "#e8a87c", name: "Warm Amber" },
@@ -47,18 +61,15 @@ const colorPalettes = [
 ];
 
 export function Dashboard() {
-  const { user, signup, login, logout, setRole, setActiveRoleView } = useUser();
-  const navigate = useNavigate();
+  const { user, signup, setRole, setActiveRoleView } = useUser();
+  const skillBadges = user.verified.filter((v) => v.startsWith("Verified "));
   const [searchParams] = useSearchParams();
-  const [authMode, setAuthMode] = useState<"signup" | "login">(
-    searchParams.get("auth") === "login" ? "login" : "signup"
-  );
-
-  useEffect(() => {
-    setAuthMode(searchParams.get("auth") === "login" ? "login" : "signup");
-  }, [searchParams]);
-  const { projects: clientProjects } = useProjects();
-  const { talentPool, myTalentId } = useTalent();
+  const sectionParam = searchParams.get("section");
+  const initialSection: FreelancerSection =
+    sectionParam && freelancerNav.some((n) => n.id === sectionParam)
+      ? (sectionParam as FreelancerSection)
+      : "overview";
+  const [freelancerSection, setFreelancerSection] = useState<FreelancerSection>(initialSection);
   const [aiInput, setAiInput] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
@@ -555,43 +566,26 @@ export function Dashboard() {
 
   return (
     <div className="pt-20 min-h-screen flex flex-col lg:flex-row bg-[var(--color-void)]">
-      {/* Sidebar Nav */}
-      <aside className="hidden lg:flex w-[220px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]/30 min-h-[calc(100vh-5rem)] p-4">
-        <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] px-3 mb-4 font-mono">
-          {isFreelancerView ? "Freelancer Space" : "Client Portal"}
-        </p>
-        {navItems.map((item) => (
-          <button
-            key={item.label}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm mb-1 transition-colors ${
-              item.active
-                ? "bg-white/[0.06] text-[var(--color-text)]"
-                : "text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/[0.03]"
-            }`}
-          >
-            <item.icon size={18} />
-            {item.label}
-          </button>
-        ))}
-
-        <div className="mt-auto pt-6 border-t border-white/5 space-y-2">
-          <Link
-            to="/portfolio"
-            className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/5 text-xs text-[var(--color-muted)] hover:text-white transition-all hover:bg-white/[0.04]"
-          >
-            <span className="font-semibold">My Portfolio</span>
-            <ChevronRight size={14} />
-          </Link>
+      {isFreelancerView ? (
+        <FreelancerSidebar
+          items={freelancerNav}
+          active={freelancerSection}
+          onSelect={setFreelancerSection}
+        />
+      ) : (
+        <aside className="hidden lg:flex w-[220px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]/30 min-h-[calc(100vh-5rem)] p-4">
+          <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] px-3 mb-4 font-mono">
+            Client Portal
+          </p>
           <button
             type="button"
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 p-2.5 rounded-lg border border-red-500/20 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm mb-1 bg-white/[0.06] text-[var(--color-text)]"
           >
-            <LogOut size={14} />
-            <span className="font-semibold">Log out</span>
+            <LayoutGrid size={18} />
+            Overview
           </button>
-        </div>
-      </aside>
+        </aside>
+      )}
 
       {/* Main Dashboard Space */}
       <div className="flex-1 p-4 md:p-8 overflow-auto">
@@ -642,23 +636,20 @@ export function Dashboard() {
           )}
 
           {/* Heading */}
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <h1 className="text-display text-2xl md:text-3xl font-medium">
-              Good evening, {user.name.split(" ")[0]}
-            </h1>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="lg:hidden flex items-center gap-2 px-3 py-2 rounded-xl border border-red-500/25 text-xs text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
-            >
-              <LogOut size={14} />
-              Log out
-            </button>
-          </div>
+          <h1 className="text-display text-2xl md:text-3xl font-medium">
+            {isFreelancerView
+              ? freelancerSection === "overview"
+                ? `Good evening, ${user.name.split(" ")[0]}`
+                : sectionTitles[freelancerSection]
+              : `Good evening, ${user.name.split(" ")[0]}`}
+          </h1>
           <p className="text-[var(--color-muted)] mt-1.5 text-sm flex items-center gap-2">
-            {isFreelancerView ? (
+            {isFreelancerView && freelancerSection === "overview" ? (
               <>
-                <span>3 active projects · 2 messages waiting</span>
+                <span>
+                  {user.contracts.length} contracts · {user.proposals.length} proposal
+                  {user.proposals.length === 1 ? "" : "s"} sent
+                </span>
                 {user.verification.status === "verified" && (
                   <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-mint)] font-mono">
                     <ShieldCheck size={11} /> AI VERIFIED TALENT
@@ -681,61 +672,23 @@ export function Dashboard() {
             {/* VIEW A: FREELANCER VIEWPORT */}
             {isFreelancerView ? (
               <motion.div
-                key="freelancer-dashboard"
+                key={freelancerSection}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="mt-10 space-y-8"
+                className="mt-10"
               >
-                <div className="space-y-4">
-                  <p className="text-[11px] uppercase tracking-wider text-[var(--color-muted)] font-mono">
-                    Current work
-                  </p>
-                  {projects.map((p, i) => (
-                    <Link
-                      key={p.id}
-                      to={`/projects/${p.id}`}
-                      className="block glass rounded-xl p-5 hover:border-[var(--color-border-strong)] transition-all group relative overflow-hidden"
-                      style={{ transform: `translateX(${i * 4}px)` }}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-medium group-hover:text-[var(--color-warm)] transition-colors" style={{ "--hover-color": user.color } as React.CSSProperties}>
-                            {p.title}
-                          </h3>
-                          <p className="text-sm text-[var(--color-muted)] mt-0.5">{p.client}</p>
-                        </div>
-                        <span className="text-[11px] px-2 py-1 rounded-full bg-white/5 text-[var(--color-muted)]">
-                          {p.status}
-                        </span>
-                      </div>
-                      <div className="mt-4 h-1.5 rounded-full bg-white/5 overflow-hidden">
-                        <motion.div
-                          className="h-full bg-gradient-to-r"
-                          style={{
-                            backgroundImage: `linear-gradient(90deg, ${user.color}, var(--color-mint))`,
-                          }}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${p.progress}%` }}
-                          transition={{ duration: 1, delay: i * 0.1 }}
-                        />
-                      </div>
-                      <div className="flex justify-between mt-3 text-[11px] text-[var(--color-muted)]">
-                        <span className="flex items-center gap-1">
-                          <Clock size={10} /> Due {p.due}
-                        </span>
-                        <span>{p.budget}</span>
-                        <ChevronRight
-                          size={14}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--color-warm)]"
-                          style={{ color: user.color }}
-                        />
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-
-                <TaskChecklist roleView="freelancer" title="Today's focus" />
+                {freelancerSection === "overview" && (
+                  <FreelancerOverviewPanel
+                    skillBadges={skillBadges}
+                    onNavigate={setFreelancerSection}
+                  />
+                )}
+                {freelancerSection === "contracts" && <ActiveContractsPanel />}
+                {freelancerSection === "earnings" && <EarningsPanel />}
+                {freelancerSection === "reviews" && <ReviewsPanel />}
+                {freelancerSection === "messages" && <MessagesPanel />}
+                {freelancerSection === "settings" && <SettingsPanel />}
               </motion.div>
             ) : (
               // VIEW B: CLIENT VIEWPORT
@@ -967,14 +920,25 @@ export function Dashboard() {
       </aside>
 
       {/* Mobile nav bar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 glass-strong border-t border-[var(--color-border)] flex justify-around py-3 px-2 z-40">
-        {navItems.slice(0, 4).map((item) => (
-          <button key={item.label} className="flex flex-col items-center gap-1 text-[10px] text-[var(--color-muted)]">
-            <item.icon size={20} />
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      {isFreelancerView && (
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 glass-strong border-t border-[var(--color-border)] flex justify-around py-2 px-1 z-40 overflow-x-auto">
+          {freelancerNav.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setFreelancerSection(item.id)}
+              className={`flex flex-col items-center gap-0.5 text-[9px] px-2 py-1 min-w-[52px] rounded-lg ${
+                freelancerSection === item.id
+                  ? "text-[var(--color-text)] bg-white/[0.06]"
+                  : "text-[var(--color-muted)]"
+              }`}
+            >
+              <item.icon size={18} />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      )}
     </div>
   );
 }
