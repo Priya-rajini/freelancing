@@ -3,13 +3,36 @@ import { useUser, type UserProfile } from "./UserContext";
 import type { TalentProfile } from "../utils/matching";
 import { parseExperienceYears } from "../utils/matching";
 import { LEGACY_SAMPLE_FREELANCER_ID } from "../utils/proposals";
+import { freelancers as mockFreelancers } from "../data/mockData";
 
 const POOL_KEY = "skillsync_talent_pool";
 const TALENT_ID_KEY = "skillsync_talent_id";
 
+function makeDefaultTalentPool(): TalentProfile[] {
+  return mockFreelancers.map((f) => ({
+    id: f.id,
+    name: f.name,
+    headline: f.role,
+    location: f.location,
+    avatar: f.avatar,
+    color: f.color,
+    skills: f.skills,
+    verified: f.verified,
+    bio: f.bio,
+    experienceYears: f.experience,
+    availability: "Available",
+    isVerified: true,
+    updatedAt: Date.now(),
+  }));
+}
+
 function loadPool(): TalentProfile[] {
   const saved = localStorage.getItem(POOL_KEY);
-  if (!saved) return [];
+  if (!saved) {
+    const defaults = makeDefaultTalentPool();
+    localStorage.setItem(POOL_KEY, JSON.stringify(defaults));
+    return defaults;
+  }
   try {
     return (JSON.parse(saved) as TalentProfile[]).filter(
       (t) => t.id !== LEGACY_SAMPLE_FREELANCER_ID

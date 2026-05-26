@@ -102,7 +102,7 @@ export function ProposalForm({
           AI match score: <span className="text-[var(--color-warm)] font-bold">{existing.score}%</span> · Status: {existing.status}
         </p>
         <Link
-          to="/ai/proposal-evaluator"
+          to={`/ai/proposal-evaluator?freelancerId=${myTalentId || user.email}&projectId=${projectId}`}
           className="inline-block mt-4 text-sm text-[var(--color-warm)] hover:underline"
         >
           View AI evaluation →
@@ -129,7 +129,7 @@ export function ProposalForm({
           <Link to="/dashboard" className="text-sm px-4 py-2 rounded-full bg-white/5 border border-[var(--color-border)] hover:border-[var(--color-warm)]/30">
             View in workspace
           </Link>
-          <Link to="/ai/proposal-evaluator" className="text-sm px-4 py-2 rounded-full bg-[var(--color-warm)] text-[#0a0a0b] font-medium">
+          <Link to={`/ai/proposal-evaluator?freelancerId=${myTalentId || user.email}&projectId=${projectId}`} className="text-sm px-4 py-2 rounded-full bg-[var(--color-warm)] text-[#0a0a0b] font-medium">
             See breakdown
           </Link>
         </div>

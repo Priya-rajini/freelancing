@@ -230,7 +230,7 @@ export function Projects() {
                         <Link to={`/projects/open/${prop.projectId}`} className="text-[var(--color-warm)] hover:underline">
                           View project
                         </Link>
-                        <Link to="/ai/proposal-evaluator" className="text-[var(--color-muted)] hover:text-[var(--color-text)]">
+                        <Link to={`/ai/proposal-evaluator?freelancerId=${myTalentId || user.email}&projectId=${prop.projectId}`} className="text-[var(--color-muted)] hover:text-[var(--color-text)]">
                           AI evaluation
                         </Link>
                       </div>
