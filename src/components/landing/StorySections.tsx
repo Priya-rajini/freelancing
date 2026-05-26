@@ -129,7 +129,7 @@ export function StorySections() {
             <AIFeatureCard
               icon={Shield}
               title="Skill Verification"
-              desc="Interactive quizzes that earn verified badges."
+              desc="MCQ + practical tests earn badges like Verified React Developer."
               to="/ai/skill-verification"
               className="md:col-span-7"
             />
